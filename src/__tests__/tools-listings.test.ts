@@ -21,14 +21,21 @@ describe('tools/listings', () => {
 
   describe('getAppInfo', () => {
     it('should return app details in markdown', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        // Get details via edit context
+        return Promise.resolve(new Response(JSON.stringify({
           defaultLanguage: 'en-US',
           contactEmail: 'info@goygoychat.com',
           contactPhone: '+1234567890',
           contactWebsite: 'https://goygoychat.com',
-        }), { status: 200 })
-      );
+        }), { status: 200 }));
+      });
 
       const { getAppInfo } = await import('../tools/listings.js');
       const result = await getAppInfo();
@@ -42,14 +49,21 @@ describe('tools/listings', () => {
 
   describe('listListings', () => {
     it('should return markdown table with listings', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        // List listings via edit context
+        return Promise.resolve(new Response(JSON.stringify({
           listings: [
             { language: 'en-US', title: 'GoyGoyChat', shortDescription: 'Voice chat app', fullDescription: 'Full desc', video: '' },
             { language: 'tr-TR', title: 'GoyGoyChat', shortDescription: 'Sesli sohbet', fullDescription: 'Tam aciklama', video: '' },
           ],
-        }), { status: 200 })
-      );
+        }), { status: 200 }));
+      });
 
       const { listListings } = await import('../tools/listings.js');
       const result = await listListings();
@@ -64,9 +78,16 @@ describe('tools/listings', () => {
     });
 
     it('should handle empty listings', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ listings: [] }), { status: 200 })
-      );
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        // Empty listings
+        return Promise.resolve(new Response(JSON.stringify({ listings: [] }), { status: 200 }));
+      });
 
       const { listListings } = await import('../tools/listings.js');
       const result = await listListings();
@@ -76,11 +97,15 @@ describe('tools/listings', () => {
   });
 
   describe('updateListing', () => {
-    it('should update listing and return success', async () => {
+    it('should update listing via edit context and commit', async () => {
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(() => {
         callCount++;
         if (callCount === 1) {
+          // Create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (callCount === 2) {
           // GET existing listing
           return Promise.resolve(new Response(JSON.stringify({
             language: 'tr-TR',
@@ -90,7 +115,7 @@ describe('tools/listings', () => {
             video: '',
           }), { status: 200 }));
         }
-        // PUT update
+        // PUT update or commit
         return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
       });
 

@@ -1,12 +1,5 @@
-import { gpcGet, gpcPut, getPackageName } from '../client.js';
+import { gpcGet, gpcPut, gpcPost, getPackageName } from '../client.js';
 import { PROJECT_LOCALES } from '../constants.js';
-
-interface AppDetails {
-  defaultLanguage: string;
-  contactEmail: string;
-  contactPhone: string;
-  contactWebsite: string;
-}
 
 interface Listing {
   language: string;
@@ -21,9 +14,19 @@ interface ListingsResponse {
   listings: Listing[];
 }
 
+// Helper: create a new edit
+async function createEdit(): Promise<string> {
+  const pkg = getPackageName();
+  const result = await gpcPost<{ id: string }>(`/applications/${pkg}/edits`);
+  return result.id;
+}
+
 export async function getAppInfo(): Promise<string> {
   const pkg = getPackageName();
-  const result = await gpcGet<AppDetails>(`/applications/${pkg}`);
+  const editId = await createEdit();
+
+  // Use edit context to get app details
+  const result = await gpcGet<any>(`/applications/${pkg}/edits/${editId}/details`);
 
   let md = `## Google Play App Info: ${pkg}\n\n`;
   md += `| Field | Value |\n`;
@@ -39,7 +42,11 @@ export async function getAppInfo(): Promise<string> {
 
 export async function listListings(): Promise<string> {
   const pkg = getPackageName();
-  const result = await gpcGet<ListingsResponse>(`/applications/${pkg}/listings`);
+  const editId = await createEdit();
+
+  const result = await gpcGet<ListingsResponse>(
+    `/applications/${pkg}/edits/${editId}/listings`
+  );
 
   const listings = result.listings || [];
 
@@ -78,11 +85,14 @@ export async function updateListing(
   }
 ): Promise<string> {
   const pkg = getPackageName();
+  const editId = await createEdit();
 
   // Get existing listing first (to merge updates)
   let existing: Partial<Listing> = {};
   try {
-    existing = await gpcGet<Listing>(`/applications/${pkg}/listings/${language}`);
+    existing = await gpcGet<Listing>(
+      `/applications/${pkg}/edits/${editId}/listings/${language}`
+    );
   } catch {
     // Listing might not exist yet, that's OK for PUT (creates or updates)
   }
@@ -95,7 +105,13 @@ export async function updateListing(
     video: updates.video ?? existing.video,
   };
 
-  await gpcPut(`/applications/${pkg}/listings/${language}`, body);
+  await gpcPut(
+    `/applications/${pkg}/edits/${editId}/listings/${language}`,
+    body
+  );
+
+  // Commit the edit to apply changes
+  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
 
   let md = `## Store Listing Updated: ${language}\n\n`;
   md += `| Field | Value |\n`;
