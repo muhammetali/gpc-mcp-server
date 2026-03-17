@@ -25,6 +25,7 @@ import {
 import { listReviews, replyReview } from './tools/reviews.js';
 import { getAcquisitionReport, getCrashReport } from './tools/reports.js';
 import { listImages, uploadImage, deleteImage } from './tools/images.js';
+import { uploadBundle, listBundles } from './tools/bundles.js';
 import { GPCClientError } from './client.js';
 
 const server = new McpServer({
@@ -272,6 +273,40 @@ server.tool(
   async ({ startDate, endDate }) => {
     try {
       const result = await getCrashReport(startDate, endDate);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+// =============================================================================
+// BUNDLES (AAB UPLOAD)
+// =============================================================================
+
+server.tool(
+  'gpc_upload_bundle',
+  'Upload an Android App Bundle (.aab) file to Google Play. Returns the version code for use with gpc_create_release.',
+  {
+    filePath: z.string().describe('Absolute path to the .aab file on disk'),
+  },
+  async ({ filePath }) => {
+    try {
+      const result = await uploadBundle(filePath);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_list_bundles',
+  'List all uploaded bundles with their version codes. Useful to verify uploads before creating releases.',
+  {},
+  async () => {
+    try {
+      const result = await listBundles();
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };

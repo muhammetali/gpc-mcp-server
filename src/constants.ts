@@ -27,6 +27,7 @@ export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
 // API timeout (30 seconds default, 120 seconds for uploads)
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const UPLOAD_TIMEOUT_MS = 120_000;
+export const BUNDLE_UPLOAD_TIMEOUT_MS = 600_000; // 10 min for large AAB files
 export const REPORT_TIMEOUT_MS = 60_000;
 
 // Pagination safety limit
