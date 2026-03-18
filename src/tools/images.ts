@@ -1,7 +1,7 @@
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { gpcGet, gpcPost, gpcDelete, gpcUpload, getPackageName } from '../client.js';
-import { type ImageType, PROJECT_LOCALES } from '../constants.js';
+import { gpcGet, gpcDelete, gpcUpload, getPackageName, createEdit, commitEdit } from '../client.js';
+import { type ImageType, MAX_IMAGE_SIZE_BYTES } from '../constants.js';
 
 interface Image {
   id: string;
@@ -12,19 +12,6 @@ interface Image {
 
 interface ImagesResponse {
   images: Image[];
-}
-
-// Helper: create a new edit
-async function createEdit(): Promise<string> {
-  const pkg = getPackageName();
-  const result = await gpcPost<{ id: string }>(`/applications/${pkg}/edits`);
-  return result.id;
-}
-
-// Helper: commit an edit
-async function commitEdit(editId: string): Promise<void> {
-  const pkg = getPackageName();
-  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
 }
 
 export async function listImages(
@@ -75,6 +62,12 @@ export async function uploadImage(
   const validExtensions = /\.(png|jpg|jpeg|webp)$/i;
   if (!resolvedPath.match(validExtensions)) {
     throw new Error(`Invalid file type. Only PNG, JPEG, and WebP images are supported: ${resolvedPath}`);
+  }
+
+  // Validate file size
+  const fileStat = statSync(resolvedPath);
+  if (fileStat.size > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error(`File too large: ${(fileStat.size / (1024 * 1024)).toFixed(1)} MB. Max allowed: ${MAX_IMAGE_SIZE_BYTES / (1024 * 1024)} MB`);
   }
 
   // Determine MIME type
@@ -128,4 +121,19 @@ export async function deleteImage(
   await commitEdit(editId);
 
   return `**Deleted** image \`${imageId}\` (${imageType}, ${language})`;
+}
+
+export async function deleteAllImages(
+  language: string,
+  imageType: ImageType,
+): Promise<string> {
+  const pkg = getPackageName();
+  const editId = await createEdit();
+
+  await gpcDelete(
+    `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`
+  );
+  await commitEdit(editId);
+
+  return `## All Images Deleted\n\nAll \`${imageType}\` images for locale \`${language}\` have been deleted.`;
 }

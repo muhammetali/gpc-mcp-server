@@ -26,6 +26,16 @@ function createAbortSignal(timeoutMs: number): AbortSignal {
   return controller.signal;
 }
 
+const DATE_REGEX = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+
+function parseDate(dateStr: string): { year: number; month: number; day: number } {
+  if (!DATE_REGEX.test(dateStr)) {
+    throw new Error(`Invalid date format: "${dateStr}". Expected YYYY-MM-DD.`);
+  }
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return { year, month, day };
+}
+
 export async function getAcquisitionReport(
   startDate: string,
   endDate: string,
@@ -45,8 +55,8 @@ export async function getAcquisitionReport(
       },
       body: JSON.stringify({
         timelineSpec: {
-          startTime: { year: parseInt(startDate.split('-')[0]), month: parseInt(startDate.split('-')[1]), day: parseInt(startDate.split('-')[2]) },
-          endTime: { year: parseInt(endDate.split('-')[0]), month: parseInt(endDate.split('-')[1]), day: parseInt(endDate.split('-')[2]) },
+          startTime: parseDate(startDate),
+          endTime: parseDate(endDate),
           aggregationPeriod: 'DAILY',
         },
         metrics: ['STORE_ACQUISITIONS', 'STORE_LISTING_VISITORS'],
@@ -127,8 +137,8 @@ export async function getCrashReport(
       },
       body: JSON.stringify({
         timelineSpec: {
-          startTime: { year: parseInt(startDate.split('-')[0]), month: parseInt(startDate.split('-')[1]), day: parseInt(startDate.split('-')[2]) },
-          endTime: { year: parseInt(endDate.split('-')[0]), month: parseInt(endDate.split('-')[1]), day: parseInt(endDate.split('-')[2]) },
+          startTime: parseDate(startDate),
+          endTime: parseDate(endDate),
           aggregationPeriod: 'DAILY',
         },
         metrics: ['CRASH_RATE', 'USER_PERCEIVED_CRASH_RATE', 'DISTINCT_USERS'],

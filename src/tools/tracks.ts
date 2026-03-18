@@ -1,4 +1,4 @@
-import { gpcGet, gpcPut, gpcPost, getPackageName } from '../client.js';
+import { gpcGet, gpcPut, getPackageName, createEdit, commitEdit } from '../client.js';
 import { PROJECT_LOCALES, type TrackType } from '../constants.js';
 
 interface LocalizedText {
@@ -24,24 +24,6 @@ interface Track {
 interface TracksResponse {
   kind: string;
   tracks: Track[];
-}
-
-interface Edit {
-  id: string;
-  expiryTimeSeconds: string;
-}
-
-// Helper: create a new edit (all modifications go through edits)
-async function createEdit(): Promise<string> {
-  const pkg = getPackageName();
-  const result = await gpcPost<Edit>(`/applications/${pkg}/edits`);
-  return result.id;
-}
-
-// Helper: commit an edit (apply changes)
-async function commitEdit(editId: string): Promise<void> {
-  const pkg = getPackageName();
-  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
 }
 
 export async function listTracks(): Promise<string> {

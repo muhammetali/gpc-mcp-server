@@ -1,4 +1,4 @@
-import { gpcGet, gpcPut, gpcPost, getPackageName } from '../client.js';
+import { gpcGet, gpcPut, gpcPatch, gpcPost, gpcDelete, getPackageName, createEdit, commitEdit, escapeMarkdown } from '../client.js';
 import { PROJECT_LOCALES } from '../constants.js';
 
 interface Listing {
@@ -12,13 +12,6 @@ interface Listing {
 interface ListingsResponse {
   kind: string;
   listings: Listing[];
-}
-
-// Helper: create a new edit
-async function createEdit(): Promise<string> {
-  const pkg = getPackageName();
-  const result = await gpcPost<{ id: string }>(`/applications/${pkg}/edits`);
-  return result.id;
 }
 
 export async function getAppInfo(): Promise<string> {
@@ -122,7 +115,7 @@ export async function updateListing(
   );
 
   // Commit the edit to apply changes
-  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
+  await commitEdit(editId);
 
   let md = `## Store Listing Updated: ${language}\n\n`;
   md += `| Field | Value |\n`;
@@ -136,4 +129,50 @@ export async function updateListing(
   md += `\n**Status:** Updated successfully`;
 
   return md;
+}
+
+export async function updateAppDetails(
+  updates: {
+    contactEmail?: string;
+    contactPhone?: string;
+    contactWebsite?: string;
+    defaultLanguage?: string;
+  },
+): Promise<string> {
+  const pkg = getPackageName();
+  const editId = await createEdit();
+
+  // Get existing details first
+  const existing = await gpcGet<any>(`/applications/${pkg}/edits/${editId}/details`);
+
+  const body = {
+    ...existing,
+    ...Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    ),
+  };
+
+  await gpcPatch(`/applications/${pkg}/edits/${editId}/details`, body);
+  await commitEdit(editId);
+
+  let md = `## App Details Updated\n\n`;
+  md += `| Updated Field | New Value |\n`;
+  md += `|---------------|----------|\n`;
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      md += `| **${key}** | ${value} |\n`;
+    }
+  }
+
+  return md;
+}
+
+export async function deleteListing(language: string): Promise<string> {
+  const pkg = getPackageName();
+  const editId = await createEdit();
+
+  await gpcDelete(`/applications/${pkg}/edits/${editId}/listings/${language}`);
+  await commitEdit(editId);
+
+  return `## Listing Deleted\n\nStore listing for locale \`${language}\` has been deleted from \`${pkg}\`.`;
 }

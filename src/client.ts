@@ -18,10 +18,13 @@ export class GPCClientError extends Error {
   }
 }
 
-function createAbortSignal(timeoutMs: number): AbortSignal {
+function createAbortSignal(timeoutMs: number): { signal: AbortSignal; clear: () => void } {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -86,21 +89,30 @@ async function fetchWithRetry(
   options: RequestInit,
   timeoutMs: number,
 ): Promise<Response> {
-  const response = await fetch(url, {
-    ...options,
-    signal: createAbortSignal(timeoutMs),
-  });
+  const abort1 = createAbortSignal(timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: abort1.signal });
+    abort1.clear();
 
-  // Retry once on 429 (rate limit)
-  if (response.status === 429) {
-    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
-    return fetch(url, {
-      ...options,
-      signal: createAbortSignal(timeoutMs),
-    });
+    // Retry once on 429 (rate limit)
+    if (response.status === 429) {
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
+      const abort2 = createAbortSignal(timeoutMs);
+      try {
+        const retryResponse = await fetch(url, { ...options, signal: abort2.signal });
+        abort2.clear();
+        return retryResponse;
+      } catch (e) {
+        abort2.clear();
+        throw e;
+      }
+    }
+
+    return response;
+  } catch (e) {
+    abort1.clear();
+    throw e;
   }
-
-  return response;
 }
 
 async function authHeaders(contentType = 'application/json'): Promise<Record<string, string>> {
@@ -165,6 +177,23 @@ export async function gpcDelete(path: string): Promise<void> {
     headers: await authHeaders(),
   }, DEFAULT_TIMEOUT_MS);
   await handleResponse<void>(response);
+}
+
+// Centralized edit lifecycle — single source of truth
+export async function createEdit(): Promise<string> {
+  const pkg = getPackageName();
+  const result = await gpcPost<{ id: string }>(`/applications/${pkg}/edits`);
+  return result.id;
+}
+
+export async function commitEdit(editId: string): Promise<void> {
+  const pkg = getPackageName();
+  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
+}
+
+// Escape pipe characters for markdown table cells
+export function escapeMarkdown(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 // Upload binary data (images) - longer timeout

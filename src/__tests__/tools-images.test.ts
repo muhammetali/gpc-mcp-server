@@ -9,6 +9,7 @@ vi.mock('../auth.js', () => ({
 vi.mock('fs', () => ({
   readFileSync: vi.fn(() => Buffer.from('fake-image-data')),
   existsSync: vi.fn(() => true),
+  statSync: vi.fn(() => ({ size: 500 * 1024 })), // 500 KB
 }));
 
 describe('tools/images', () => {

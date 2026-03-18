@@ -6,14 +6,14 @@ vi.mock('../auth.js', () => ({
 }));
 
 // Mock fs with controllable behavior
-const mockExistsSync = vi.fn(() => true);
-const mockStatSync = vi.fn(() => ({ size: 50 * 1024 * 1024 })); // 50MB
-const mockReadFileSync = vi.fn(() => Buffer.from('fake-aab-data'));
+const mockExistsSync = vi.fn<(p: string) => boolean>(() => true);
+const mockStatSync = vi.fn<(p: string) => { size: number }>(() => ({ size: 50 * 1024 * 1024 }));
+const mockReadFileSync = vi.fn<(p: string) => Buffer>(() => Buffer.from('fake-aab-data'));
 
 vi.mock('fs', () => ({
-  existsSync: (...args: any[]) => mockExistsSync(...args),
-  statSync: (...args: any[]) => mockStatSync(...args),
-  readFileSync: (...args: any[]) => mockReadFileSync(...args),
+  existsSync: (p: string) => mockExistsSync(p),
+  statSync: (p: string) => mockStatSync(p),
+  readFileSync: (p: string) => mockReadFileSync(p),
 }));
 
 describe('tools/bundles', () => {

@@ -33,5 +33,11 @@ export const REPORT_TIMEOUT_MS = 60_000;
 // Pagination safety limit
 export const MAX_PAGES = 20;
 
-// API Base URL
+// API Base URLs
 export const API_BASE_URL = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
+export const UPLOAD_BASE_URL = 'https://androidpublisher.googleapis.com/upload/androidpublisher/v3';
+
+// File size limits
+export const MAX_BUNDLE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB (Google Play limit)
+export const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
+export const MAX_MAPPING_SIZE_BYTES = 300 * 1024 * 1024; // 300 MB
