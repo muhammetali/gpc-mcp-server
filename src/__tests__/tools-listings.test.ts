@@ -127,5 +127,53 @@ describe('tools/listings', () => {
       expect(result).toContain('New Title');
       expect(result).toContain('Updated successfully');
     });
+
+    it('should reject title exceeding 30 characters', async () => {
+      const { updateListing } = await import('../tools/listings.js');
+      const result = await updateListing('en-US', { title: 'A'.repeat(31) });
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('30 characters');
+    });
+
+    it('should reject short description exceeding 80 characters', async () => {
+      const { updateListing } = await import('../tools/listings.js');
+      const result = await updateListing('en-US', { shortDescription: 'A'.repeat(81) });
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('80 characters');
+    });
+
+    it('should reject full description exceeding 4000 characters', async () => {
+      const { updateListing } = await import('../tools/listings.js');
+      const result = await updateListing('en-US', { fullDescription: 'A'.repeat(4001) });
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('4000 characters');
+    });
+
+    it('should accept fields at exactly the maximum length', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (callCount === 2) {
+          return Promise.resolve(new Response(JSON.stringify({
+            language: 'en-US', title: 'Old', fullDescription: 'Old', shortDescription: 'Old', video: '',
+          }), { status: 200 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { updateListing } = await import('../tools/listings.js');
+      const result = await updateListing('en-US', {
+        title: 'A'.repeat(30),
+        shortDescription: 'B'.repeat(80),
+      });
+
+      expect(result).toContain('Updated successfully');
+    });
   });
 });

@@ -84,6 +84,17 @@ export async function updateListing(
     video?: string;
   }
 ): Promise<string> {
+  // Validate field lengths
+  if (updates.title !== undefined && updates.title.length > 30) {
+    return `**Error:** Title exceeds 30 characters (got ${updates.title.length}).`;
+  }
+  if (updates.shortDescription !== undefined && updates.shortDescription.length > 80) {
+    return `**Error:** Short description exceeds 80 characters (got ${updates.shortDescription.length}).`;
+  }
+  if (updates.fullDescription !== undefined && updates.fullDescription.length > 4000) {
+    return `**Error:** Full description exceeds 4000 characters (got ${updates.fullDescription.length}).`;
+  }
+
   const pkg = getPackageName();
   const editId = await createEdit();
 

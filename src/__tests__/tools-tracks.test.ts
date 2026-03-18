@@ -227,4 +227,159 @@ describe('tools/tracks', () => {
       expect(result).toContain('draft');
     });
   });
+
+  describe('promoteRelease', () => {
+    it('should promote release from internal to beta', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (callCount === 2) {
+          // Get source track (internal)
+          return Promise.resolve(new Response(JSON.stringify({
+            track: 'internal',
+            releases: [{
+              status: 'completed',
+              versionCodes: ['10205'],
+              name: '1.2.5',
+              releaseNotes: [
+                { language: 'en-US', text: 'Bug fixes and improvements' },
+                { language: 'tr-TR', text: 'Hata duzeltmeleri' },
+              ],
+            }],
+          }), { status: 200 }));
+        }
+        // PUT to destination track + commit
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { promoteRelease } = await import('../tools/tracks.js');
+      const result = await promoteRelease('internal', 'beta');
+
+      expect(result).toContain('## Release Promoted');
+      expect(result).toContain('internal');
+      expect(result).toContain('beta');
+      expect(result).toContain('10205');
+      expect(result).toContain('1.2.5');
+      expect(result).toContain('completed');
+    });
+
+    it('should return error when source and destination tracks are the same', async () => {
+      const { promoteRelease } = await import('../tools/tracks.js');
+      const result = await promoteRelease('beta', 'beta');
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('same');
+    });
+
+    it('should return error when source track has no releases', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        // Source track has no releases
+        return Promise.resolve(new Response(JSON.stringify({
+          track: 'internal',
+          releases: [],
+        }), { status: 200 }));
+      });
+
+      const { promoteRelease } = await import('../tools/tracks.js');
+      const result = await promoteRelease('internal', 'production');
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('No releases found');
+      expect(result).toContain('internal');
+    });
+
+    it('should return error when source track has no active release', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify({
+          track: 'internal',
+          releases: [{ status: 'draft', versionCodes: ['100'] }],
+        }), { status: 200 }));
+      });
+
+      const { promoteRelease } = await import('../tools/tracks.js');
+      const result = await promoteRelease('internal', 'beta');
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('No active release');
+    });
+  });
+
+  describe('input validation', () => {
+    it('should reject release notes exceeding 500 characters', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        return Promise.resolve(new Response(JSON.stringify(
+          callCount === 1 ? { id: 'edit-1' } : {}
+        ), { status: 200 }));
+      });
+
+      const { createRelease } = await import('../tools/tracks.js');
+      const longNote = 'a'.repeat(501);
+      const result = await createRelease(
+        'internal',
+        '100',
+        { 'en-US': longNote },
+      );
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('500 characters');
+      expect(result).toContain('501');
+    });
+
+    it('should accept release notes at exactly 500 characters', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        return Promise.resolve(new Response(JSON.stringify(
+          callCount === 1 ? { id: 'edit-1' } : {}
+        ), { status: 200 }));
+      });
+
+      const { createRelease } = await import('../tools/tracks.js');
+      const exactNote = 'a'.repeat(500);
+      const result = await createRelease(
+        'internal',
+        '100',
+        { 'en-US': exactNote },
+      );
+
+      expect(result).toContain('## Release Created');
+    });
+
+    it('should reject update release notes exceeding 500 characters', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify({
+          track: 'production',
+          releases: [{ status: 'completed', versionCodes: ['100'], releaseNotes: [] }],
+        }), { status: 200 }));
+      });
+
+      const { updateReleaseNotes } = await import('../tools/tracks.js');
+      const longNote = 'b'.repeat(501);
+      const result = await updateReleaseNotes('production', { 'tr-TR': longNote });
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('500 characters');
+    });
+  });
 });

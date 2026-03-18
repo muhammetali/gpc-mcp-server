@@ -135,5 +135,27 @@ describe('tools/reviews', () => {
       expect(result).toContain('review-1');
       expect(result).toContain('Thanks for your feedback');
     });
+
+    it('should reject reply exceeding 350 characters', async () => {
+      const { replyReview } = await import('../tools/reviews.js');
+      const longReply = 'A'.repeat(351);
+      const result = await replyReview('review-1', longReply);
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('350 characters');
+      expect(result).toContain('351');
+    });
+
+    it('should accept reply at exactly 350 characters', async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ result: { replyText: 'ok' } }), { status: 200 })
+      );
+
+      const { replyReview } = await import('../tools/reviews.js');
+      const exactReply = 'A'.repeat(350);
+      const result = await replyReview('review-1', exactReply);
+
+      expect(result).toContain('## Reply Sent');
+    });
   });
 });

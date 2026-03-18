@@ -106,6 +106,11 @@ export async function replyReview(
   reviewId: string,
   replyText: string,
 ): Promise<string> {
+  // Validate reply length
+  if (replyText.length > 350) {
+    return `**Error:** Reply text exceeds 350 characters (got ${replyText.length}).`;
+  }
+
   const pkg = getPackageName();
 
   const result = await gpcPost<any>(

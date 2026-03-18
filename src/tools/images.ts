@@ -34,34 +34,30 @@ export async function listImages(
   const pkg = getPackageName();
   const editId = await createEdit();
 
-  try {
-    const result = await gpcGet<ImagesResponse>(
-      `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`
-    );
+  const result = await gpcGet<ImagesResponse>(
+    `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`
+  );
 
-    const images = result.images || [];
+  const images = result.images || [];
 
-    let md = `## Images: ${imageType} (${language})\n\n`;
+  let md = `## Images: ${imageType} (${language})\n\n`;
 
-    if (images.length === 0) {
-      md += `No ${imageType} uploaded for locale \`${language}\`.\n`;
-      return md;
-    }
-
-    md += `| # | Image ID | URL (preview) |\n`;
-    md += `|---|----------|---------------|\n`;
-
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
-      const urlPreview = img.url ? img.url.slice(0, 60) + '...' : '-';
-      md += `| ${i + 1} | ${img.id} | ${urlPreview} |\n`;
-    }
-
-    md += `\n**Total:** ${images.length} image(s)`;
+  if (images.length === 0) {
+    md += `No ${imageType} uploaded for locale \`${language}\`.\n`;
     return md;
-  } finally {
-    // Read-only, no commit needed
   }
+
+  md += `| # | Image ID | URL (preview) |\n`;
+  md += `|---|----------|---------------|\n`;
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    const urlPreview = img.url ? img.url.slice(0, 60) + '...' : '-';
+    md += `| ${i + 1} | ${img.id} | ${urlPreview} |\n`;
+  }
+
+  md += `\n**Total:** ${images.length} image(s)`;
+  return md;
 }
 
 export async function uploadImage(
@@ -97,29 +93,25 @@ export async function uploadImage(
   const pkg = getPackageName();
   const editId = await createEdit();
 
-  try {
-    const result = await gpcUpload<Image>(
-      `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`,
-      new Uint8Array(fileData),
-      mimeType,
-    );
+  const result = await gpcUpload<Image>(
+    `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`,
+    new Uint8Array(fileData),
+    mimeType,
+  );
 
-    await commitEdit(editId);
+  await commitEdit(editId);
 
-    let md = `## Image Uploaded\n\n`;
-    md += `| Field | Value |\n`;
-    md += `|-------|-------|\n`;
-    md += `| **Language** | ${language} |\n`;
-    md += `| **Type** | ${imageType} |\n`;
-    md += `| **File** | ${resolvedPath.split('/').pop()} |\n`;
-    md += `| **Size** | ${fileSizeKB} KB |\n`;
-    md += `| **Image ID** | ${result.id || '-'} |\n`;
-    md += `\n**Status:** Upload complete!`;
+  let md = `## Image Uploaded\n\n`;
+  md += `| Field | Value |\n`;
+  md += `|-------|-------|\n`;
+  md += `| **Language** | ${language} |\n`;
+  md += `| **Type** | ${imageType} |\n`;
+  md += `| **File** | ${resolvedPath.split('/').pop()} |\n`;
+  md += `| **Size** | ${fileSizeKB} KB |\n`;
+  md += `| **Image ID** | ${result.id || '-'} |\n`;
+  md += `\n**Status:** Upload complete!`;
 
-    return md;
-  } catch (e) {
-    throw e;
-  }
+  return md;
 }
 
 export async function deleteImage(
@@ -130,14 +122,10 @@ export async function deleteImage(
   const pkg = getPackageName();
   const editId = await createEdit();
 
-  try {
-    await gpcDelete(
-      `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}/${imageId}`
-    );
-    await commitEdit(editId);
+  await gpcDelete(
+    `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}/${imageId}`
+  );
+  await commitEdit(editId);
 
-    return `**Deleted** image \`${imageId}\` (${imageType}, ${language})`;
-  } catch (e) {
-    throw e;
-  }
+  return `**Deleted** image \`${imageId}\` (${imageType}, ${language})`;
 }

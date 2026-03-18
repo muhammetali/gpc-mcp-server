@@ -90,7 +90,8 @@ describe('client', () => {
       await expect(gpcGet('/not-found')).rejects.toThrow(GPCClientError);
     });
 
-    it('should handle rate limiting (429)', async () => {
+    it('should handle rate limiting (429) after retry', async () => {
+      // Both attempts return 429
       global.fetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ error: { code: 429, message: 'Quota exceeded', status: 'RESOURCE_EXHAUSTED' } }), {
           status: 429,
@@ -109,6 +110,28 @@ describe('client', () => {
         expect(err.error.status).toBe('RATE_LIMITED');
         expect(err.error.message).toContain('60');
       }
+      // Should have been called twice (initial + 1 retry)
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should succeed on retry after 429', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(
+            JSON.stringify({ error: { code: 429, message: 'Quota exceeded', status: 'RESOURCE_EXHAUSTED' } }),
+            { status: 429, headers: { 'retry-after': '1' } },
+          ));
+        }
+        return Promise.resolve(new Response(JSON.stringify({ data: 'success' }), { status: 200 }));
+      });
+
+      const { gpcGet } = await import('../client.js');
+      const result = await gpcGet('/path');
+
+      expect(result).toEqual({ data: 'success' });
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
     it('should include AbortSignal for timeout', async () => {

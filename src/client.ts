@@ -79,6 +79,30 @@ async function handleResponse<T>(response: Response): Promise<T> {
   }
 }
 
+const RATE_LIMIT_RETRY_DELAY_MS = 2_000;
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const response = await fetch(url, {
+    ...options,
+    signal: createAbortSignal(timeoutMs),
+  });
+
+  // Retry once on 429 (rate limit)
+  if (response.status === 429) {
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
+    return fetch(url, {
+      ...options,
+      signal: createAbortSignal(timeoutMs),
+    });
+  }
+
+  return response;
+}
+
 async function authHeaders(contentType = 'application/json'): Promise<Record<string, string>> {
   const token = await getAccessToken();
   return {
@@ -102,63 +126,57 @@ export async function gpcGet<T = any>(path: string, params?: Record<string, stri
       url.searchParams.set(k, v);
     }
   }
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithRetry(url.toString(), {
     headers: await authHeaders(),
-    signal: createAbortSignal(DEFAULT_TIMEOUT_MS),
-  });
+  }, DEFAULT_TIMEOUT_MS);
   return handleResponse<T>(response);
 }
 
 export async function gpcPost<T = any>(path: string, body?: any): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: await authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
-    signal: createAbortSignal(DEFAULT_TIMEOUT_MS),
-  });
+  }, DEFAULT_TIMEOUT_MS);
   return handleResponse<T>(response);
 }
 
 export async function gpcPut<T = any>(path: string, body: any): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
     method: 'PUT',
     headers: await authHeaders(),
     body: JSON.stringify(body),
-    signal: createAbortSignal(DEFAULT_TIMEOUT_MS),
-  });
+  }, DEFAULT_TIMEOUT_MS);
   return handleResponse<T>(response);
 }
 
 export async function gpcPatch<T = any>(path: string, body: any): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
     method: 'PATCH',
     headers: await authHeaders(),
     body: JSON.stringify(body),
-    signal: createAbortSignal(DEFAULT_TIMEOUT_MS),
-  });
+  }, DEFAULT_TIMEOUT_MS);
   return handleResponse<T>(response);
 }
 
 export async function gpcDelete(path: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
     method: 'DELETE',
     headers: await authHeaders(),
-    signal: createAbortSignal(DEFAULT_TIMEOUT_MS),
-  });
+  }, DEFAULT_TIMEOUT_MS);
   await handleResponse<void>(response);
 }
 
 // Upload binary data (images) - longer timeout
 export async function gpcUpload<T = any>(path: string, data: Uint8Array, mimeType: string): Promise<T> {
   const token = await getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': mimeType,
     },
     body: data as any,
-    signal: createAbortSignal(UPLOAD_TIMEOUT_MS),
-  });
+  }, UPLOAD_TIMEOUT_MS);
   return handleResponse<T>(response);
 }
