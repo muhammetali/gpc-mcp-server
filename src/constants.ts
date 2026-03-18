@@ -1,4 +1,4 @@
-// GoyGoyChat supported locales for Google Play - Single Source of Truth
+// Supported locales for Google Play - Single Source of Truth
 // Google Play uses BCP 47 format (different from Apple's locale codes)
 export const PROJECT_LOCALES = ['en-US', 'tr-TR', 'de-DE', 'es-419', 'fr-FR', 'ru-RU', 'ar'] as const;
 export type ProjectLocale = (typeof PROJECT_LOCALES)[number];

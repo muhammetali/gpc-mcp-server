@@ -317,6 +317,77 @@ export async function haltRollout(
   }
 }
 
+export async function promoteRelease(
+  fromTrack: TrackType,
+  toTrack: TrackType,
+  status: string = 'completed',
+  userFraction?: number,
+): Promise<string> {
+  if (fromTrack === toTrack) {
+    return `**Error:** Source and destination tracks are the same (\`${fromTrack}\`).`;
+  }
+
+  const pkg = getPackageName();
+  const editId = await createEdit();
+
+  try {
+    // Get current track data from source
+    const sourceTrack = await gpcGet<Track>(
+      `/applications/${pkg}/edits/${editId}/tracks/${fromTrack}`
+    );
+
+    const releases = sourceTrack.releases || [];
+    if (releases.length === 0) {
+      return `**Error:** No releases found in track \`${fromTrack}\`.`;
+    }
+
+    // Find the latest completed or inProgress release
+    const sourceRelease = releases.find(r => r.status === 'completed' || r.status === 'inProgress');
+    if (!sourceRelease) {
+      return `**Error:** No active release found in track \`${fromTrack}\`. Latest release status: \`${releases[0].status}\`.`;
+    }
+
+    if (!sourceRelease.versionCodes || sourceRelease.versionCodes.length === 0) {
+      return `**Error:** Source release has no version codes.`;
+    }
+
+    // Create release on destination track
+    const newRelease: Release = {
+      versionCodes: sourceRelease.versionCodes,
+      releaseNotes: sourceRelease.releaseNotes || [],
+      status,
+      name: sourceRelease.name,
+    };
+
+    if (userFraction !== undefined && status === 'inProgress') {
+      newRelease.userFraction = userFraction;
+    }
+
+    await gpcPut(`/applications/${pkg}/edits/${editId}/tracks/${toTrack}`, {
+      track: toTrack,
+      releases: [newRelease],
+    });
+
+    await commitEdit(editId);
+
+    let md = `## Release Promoted\n\n`;
+    md += `| Field | Value |\n`;
+    md += `|-------|-------|\n`;
+    md += `| **From Track** | ${fromTrack} |\n`;
+    md += `| **To Track** | ${toTrack} |\n`;
+    md += `| **Version Code(s)** | ${sourceRelease.versionCodes.join(', ')} |\n`;
+    md += `| **Name** | ${sourceRelease.name || '-'} |\n`;
+    md += `| **Status** | ${status} |\n`;
+    if (userFraction !== undefined) {
+      md += `| **Rollout** | ${(userFraction * 100).toFixed(0)}% |\n`;
+    }
+
+    return md;
+  } catch (e) {
+    throw e;
+  }
+}
+
 function getStatusIndicator(status: string): string {
   switch (status) {
     case 'completed': return '[LIVE]';

@@ -20,7 +20,7 @@ const imageTypeSchema = z.enum(IMAGE_TYPES).describe('Image type (phoneScreensho
 import { getAppInfo, listListings, updateListing } from './tools/listings.js';
 import {
   listTracks, createRelease, updateReleaseNotes,
-  setRollout, haltRollout,
+  setRollout, haltRollout, promoteRelease,
 } from './tools/tracks.js';
 import { listReviews, replyReview } from './tools/reviews.js';
 import { getAcquisitionReport, getCrashReport } from './tools/reports.js';
@@ -197,6 +197,25 @@ server.tool(
   async ({ track }) => {
     try {
       const result = await haltRollout(track);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_promote_release',
+  'Promote a release from one track to another (e.g., internal → beta → production). Copies the latest release with its version codes and release notes.',
+  {
+    fromTrack: trackSchema.describe('Source track to promote from'),
+    toTrack: trackSchema.describe('Destination track to promote to'),
+    status: z.enum(['draft', 'inProgress', 'completed']).default('completed').describe('Release status on destination track'),
+    userFraction: z.number().min(0.01).max(1.0).optional().describe('Staged rollout fraction (only for inProgress status)'),
+  },
+  async ({ fromTrack, toTrack, status, userFraction }) => {
+    try {
+      const result = await promoteRelease(fromTrack, toTrack, status, userFraction);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
