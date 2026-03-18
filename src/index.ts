@@ -21,6 +21,7 @@ import { getAppInfo, listListings, updateListing, updateAppDetails, deleteListin
 import {
   listTracks, createRelease, updateReleaseNotes,
   setRollout, haltRollout, promoteRelease,
+  validateRelease, releaseHistory,
 } from './tools/tracks.js';
 import { listReviews, replyReview } from './tools/reviews.js';
 import { getAcquisitionReport, getCrashReport } from './tools/reports.js';
@@ -164,10 +165,11 @@ server.tool(
     releaseName: z.string().optional().describe('Release name (e.g., "2.1.0-rc1")'),
     status: z.enum(['draft', 'inProgress', 'completed']).default('draft').describe('Release status: draft, inProgress (staged rollout), or completed (full rollout)'),
     userFraction: z.number().min(0.01).max(1.0).optional().describe('Rollout fraction (0.01-1.0). Only used when status is inProgress.'),
+    autoFillLocales: z.boolean().default(true).describe('Auto-fill missing locale release notes from en-US (default: true)'),
   },
-  async ({ track, versionCode, releaseNotes, releaseName, status, userFraction }) => {
+  async ({ track, versionCode, releaseNotes, releaseName, status, userFraction, autoFillLocales }) => {
     try {
-      const result = await createRelease(track, versionCode, releaseNotes, releaseName, status, userFraction);
+      const result = await createRelease(track, versionCode, releaseNotes, releaseName, status, userFraction, autoFillLocales);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
@@ -233,10 +235,45 @@ server.tool(
     toTrack: trackSchema.describe('Destination track to promote to'),
     status: z.enum(['draft', 'inProgress', 'completed']).default('completed').describe('Release status on destination track'),
     userFraction: z.number().min(0.01).max(1.0).optional().describe('Staged rollout fraction (only for inProgress status)'),
+    releaseNotes: z.record(z.string(), z.string()).optional().describe('Override release notes (locale -> text). If omitted, copies from source track.'),
   },
-  async ({ fromTrack, toTrack, status, userFraction }) => {
+  async ({ fromTrack, toTrack, status, userFraction, releaseNotes }) => {
     try {
-      const result = await promoteRelease(fromTrack, toTrack, status, userFraction);
+      const result = await promoteRelease(fromTrack, toTrack, status, userFraction, releaseNotes);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_validate_release',
+  'Pre-release validation: checks if version code is uploaded, track has no blocking drafts, and release notes cover all locales.',
+  {
+    track: trackSchema,
+    versionCode: z.string().describe('Version code to validate'),
+  },
+  async ({ track, versionCode }) => {
+    try {
+      const result = await validateRelease(track, versionCode);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_release_history',
+  'View detailed release history for a specific track. Shows version codes, statuses, rollout percentages, and release notes.',
+  {
+    track: trackSchema,
+    limit: z.number().min(1).max(50).default(10).describe('Maximum number of releases to show (default: 10)'),
+  },
+  async ({ track, limit }) => {
+    try {
+      const result = await releaseHistory(track, limit);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
@@ -425,10 +462,11 @@ server.tool(
     releaseName: z.string().optional().describe('Release name (e.g., "2.1.0")'),
     status: z.enum(['draft', 'inProgress', 'completed']).default('completed').describe('Release status: draft, inProgress (staged rollout), or completed (full rollout)'),
     userFraction: z.number().min(0.01).max(1.0).optional().describe('Rollout fraction (0.01-1.0). Only used when status is inProgress.'),
+    autoFillLocales: z.boolean().default(true).describe('Auto-fill missing locale release notes from en-US (default: true)'),
   },
-  async ({ filePath, track, releaseNotes, releaseName, status, userFraction }) => {
+  async ({ filePath, track, releaseNotes, releaseName, status, userFraction, autoFillLocales }) => {
     try {
-      const result = await uploadAab(filePath, track, releaseNotes, releaseName, status, userFraction);
+      const result = await uploadAab(filePath, track, releaseNotes, releaseName, status, userFraction, autoFillLocales);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };

@@ -101,6 +101,7 @@ export async function uploadAab(
   releaseName?: string,
   status: string = 'completed',
   userFraction?: number,
+  autoFillLocales: boolean = true,
 ): Promise<string> {
   const absPath = resolve(filePath);
 
@@ -112,7 +113,24 @@ export async function uploadAab(
     return `**Error:** File must be an Android App Bundle (.aab). Got: \`${absPath}\``;
   }
 
-  for (const [lang, text] of Object.entries(releaseNotes)) {
+  // Work on a copy to avoid mutating caller's object
+  const effectiveNotes = { ...releaseNotes };
+
+  // Auto-fill missing locales from en-US fallback
+  const autoFilledLocales: string[] = [];
+  if (autoFillLocales) {
+    const fallbackText = effectiveNotes['en-US'];
+    if (fallbackText) {
+      for (const locale of PROJECT_LOCALES) {
+        if (!effectiveNotes[locale]) {
+          effectiveNotes[locale] = fallbackText;
+          autoFilledLocales.push(locale);
+        }
+      }
+    }
+  }
+
+  for (const [lang, text] of Object.entries(effectiveNotes)) {
     if (text.length > 500) {
       return `**Error:** Release notes for \`${lang}\` exceed 500 characters (got ${text.length}).`;
     }
@@ -135,7 +153,7 @@ export async function uploadAab(
   const bundle = await uploadBinary(uploadUrl, fileData, token, UPLOAD_TIMEOUT_MS * 3) as Bundle;
 
   // Step 2: Create release on the specified track
-  const notes = Object.entries(releaseNotes).map(([language, text]) => ({ language, text }));
+  const notes = Object.entries(effectiveNotes).map(([language, text]) => ({ language, text }));
 
   const release: Record<string, any> = {
     versionCodes: [String(bundle.versionCode)],
@@ -173,15 +191,20 @@ export async function uploadAab(
   if (userFraction !== undefined) md += `| **Rollout** | ${(userFraction * 100).toFixed(0)}% |\n`;
 
   md += `\n**Release Notes:**\n`;
-  for (const [lang, text] of Object.entries(releaseNotes)) {
+  for (const [lang, text] of Object.entries(effectiveNotes)) {
     const preview = text.length > 60 ? text.slice(0, 60) + '...' : text;
-    md += `- ${lang}: ${preview}\n`;
+    const suffix = autoFilledLocales.includes(lang) ? ' *(auto-filled from en-US)*' : '';
+    md += `- ${lang}: ${preview}${suffix}\n`;
   }
 
-  const noteLocales = Object.keys(releaseNotes);
+  const noteLocales = Object.keys(effectiveNotes);
   const missingLocales = PROJECT_LOCALES.filter(l => !noteLocales.includes(l));
   if (missingLocales.length > 0) {
     md += `\n> **Warning:** Release notes missing for: ${missingLocales.join(', ')}\n`;
+  }
+
+  if (autoFilledLocales.length > 0) {
+    md += `\n> **Info:** Auto-filled ${autoFilledLocales.length} locale(s) from en-US: ${autoFilledLocales.join(', ')}\n`;
   }
 
   return md;
