@@ -716,5 +716,77 @@ describe('tools/tracks', () => {
       expect(result).toContain('**Error:**');
       expect(result).toContain('500 characters');
     });
+
+    it('should update release notes successfully (happy path)', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // create edit
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (callCount === 2) {
+          // get track
+          return Promise.resolve(new Response(JSON.stringify({
+            track: 'production',
+            releases: [{ status: 'completed', versionCodes: ['53'], releaseNotes: [] }],
+          }), { status: 200 }));
+        }
+        if (callCount === 3) {
+          // put track
+          return Promise.resolve(new Response(JSON.stringify({
+            track: 'production',
+            releases: [{ status: 'completed', versionCodes: ['53'], releaseNotes: [{ language: 'en-US', text: 'Bug fixes' }] }],
+          }), { status: 200 }));
+        }
+        // commit edit
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { updateReleaseNotes } = await import('../tools/tracks.js');
+      const result = await updateReleaseNotes('production', { 'en-US': 'Bug fixes', 'tr-TR': 'Hata duzeltmeleri' });
+
+      expect(result).toContain('Release Notes Updated');
+      expect(result).toContain('en-US');
+      expect(result).toContain('Bug fixes');
+      expect(result).toContain('tr-TR');
+      expect(result).toContain('Updated and committed successfully');
+    });
+
+    it('should warn about missing locales', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        if (callCount === 2) return Promise.resolve(new Response(JSON.stringify({
+          track: 'internal', releases: [{ status: 'draft', versionCodes: ['50'], releaseNotes: [] }],
+        }), { status: 200 }));
+        if (callCount === 3) return Promise.resolve(new Response(JSON.stringify({ track: 'internal' }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { updateReleaseNotes } = await import('../tools/tracks.js');
+      // Only provide en-US, other locales should trigger warning
+      const result = await updateReleaseNotes('internal', { 'en-US': 'Test' });
+
+      expect(result).toContain('Release Notes Updated');
+      expect(result).toContain('Warning');
+      expect(result).toContain('missing');
+    });
+
+    it('should return error when no releases exist', async () => {
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ track: 'production', releases: [] }), { status: 200 }));
+      });
+
+      const { updateReleaseNotes } = await import('../tools/tracks.js');
+      const result = await updateReleaseNotes('production', { 'en-US': 'Notes' });
+
+      expect(result).toContain('**Error:**');
+      expect(result).toContain('No releases found');
+    });
   });
 });
