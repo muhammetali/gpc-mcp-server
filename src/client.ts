@@ -1,5 +1,5 @@
 import { getAccessToken } from './auth.js';
-import { DEFAULT_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, API_BASE_URL, MAX_PAGES } from './constants.js';
+import { DEFAULT_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, API_BASE_URL, UPLOAD_BASE_URL, MAX_PAGES } from './constants.js';
 
 export interface GPCError {
   code: number;
@@ -199,7 +199,7 @@ export function escapeMarkdown(text: string): string {
 // Upload binary data (images) - longer timeout
 export async function gpcUpload<T = any>(path: string, data: Uint8Array, mimeType: string): Promise<T> {
   const token = await getAccessToken();
-  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${UPLOAD_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
