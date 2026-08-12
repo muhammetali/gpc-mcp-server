@@ -119,3 +119,62 @@ change (commit message links the exact reference pages used). If a similar
 apply the same diagnostic: read the error message literally, check Play
 Console permissions ONCE to rule it out, then assume deprecated-endpoint
 and go find that resource's current REST reference page.
+
+### Round 2 (same day) — AI-summarized docs got the path wrong; use the discovery JSON
+
+The first pass at this migration (above) used Claude's `WebFetch` tool to
+summarize Google's human-readable REST reference pages. That summary was
+**wrong on two points**, both only caught by testing against the live API:
+
+1. **Wrong path.** The summarized docs said the path had a `monetization/`
+   segment (`applications/{pkg}/monetization/onetimeproducts`). The real
+   path has **no such segment** — `applications/{pkg}/oneTimeProducts`.
+   Confirmed by curling the endpoint directly: even with a garbage auth
+   token, the wrong path 404'd (Google's generic HTML 404 page) before auth
+   was ever checked — proof the URL itself was wrong, not a permissions
+   thing. And the casing isn't even consistent across methods: `list` /
+   `get` / `delete` / `batchGet` / `batchUpdate` use `oneTimeProducts`
+   (camelCase), but `patch` specifically uses `onetimeproducts` (all
+   lowercase). This inconsistency is real, verified against Google's own
+   data, not a typo to "fix."
+2. **`state` looked writable, isn't.** The summarized docs didn't flag it
+   as read-only. Google's schema (`OneTimeProductPurchaseOption.state`) has
+   `"readOnly": true` — sending it in a PATCH body is silently ignored (or
+   worse). Activating a newly-created purchase option requires the
+   dedicated `purchaseOptions:batchUpdateStates` endpoint (see
+   `activatePurchaseOption`/`deactivatePurchaseOption` in `products.ts`).
+
+**Root cause of both: relying on an LLM's markdown summary of an HTML docs
+page for exact-match details (path casing, readOnly flags) that summarizer
+has no strong incentive to preserve precisely.** The actual fix: fetch
+Google's **discovery document** instead — it's the machine-generated,
+authoritative source those human-readable pages are rendered from, and it
+resolved both issues in minutes once used:
+
+```bash
+curl -s "https://androidpublisher.googleapis.com/\$discovery/rest?version=v3" -o /tmp/androidpublisher_discovery.json
+python3 -c "
+import json
+d = json.load(open('/tmp/androidpublisher_discovery.json'))
+otp = d['resources']['monetization']['resources']['onetimeproducts']
+print(otp['methods']['list']['path'])   # exact path per method
+print(json.dumps(d['schemas']['OneTimeProductPurchaseOption'], indent=2))  # readOnly flags, exact field names
+"
+```
+
+**Lesson for any future Google Play Developer API work in this repo:** for
+anything more specific than "does this resource exist" — exact path
+casing, which fields are read-only, exact enum values — go straight to the
+discovery JSON above. Don't trust a summarized fetch of the human docs for
+those details; verify against a real (even unauthenticated) request before
+declaring a fix done, the way this round did.
+
+A third bug was caught in the same live test but is unrelated to paths:
+Google's `Money` type is proto3, which **omits fields at their zero value**
+from JSON output entirely — a $0.99 price (`units` = 0) comes back with no
+`units` key at all, not `units: "0"`. `formatPrice()` in `products.ts` was
+doing `parseInt(price.units, 10)` unconditionally, so it silently printed
+`NaN USD` for any product whose price has a zero whole-dollar part. Fixed
+by defaulting both `units` and `nanos` to 0 when absent — general lesson:
+never trust a proto3-JSON-backed API to always send a field just because
+its type says it's not optional in your local interface.

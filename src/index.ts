@@ -554,7 +554,7 @@ server.tool(
 
 server.tool(
   'gpc_update_product',
-  'Update an existing in-app product (title, description, and/or the price for one region).',
+  'Update an existing in-app product (title, description, price for one region, and/or active state).',
   {
     productId: z.string().describe('Product ID to update'),
     title: z.string().optional().describe('New title'),
@@ -563,6 +563,7 @@ server.tool(
     priceMicros: z.string().optional().describe('New price in micros (requires currency and regionCode too)'),
     currency: z.string().optional().describe('Currency code matching regionCode (required if priceMicros is set)'),
     regionCode: z.string().optional().describe('ISO region code the price applies to, e.g. "US" (required if priceMicros is set)'),
+    active: z.boolean().optional().describe('true = activate the base purchase option (purchasable); false = deactivate it'),
   },
   async ({ productId, ...updates }) => {
     try {

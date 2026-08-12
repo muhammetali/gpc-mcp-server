@@ -1,15 +1,33 @@
-import { gpcGet, gpcPatch, gpcDelete, getPackageName, escapeMarkdown } from '../client.js';
+import { gpcGet, gpcPatch, gpcPost, gpcDelete, getPackageName, escapeMarkdown } from '../client.js';
 import { MAX_PAGES, REGIONS_VERSION } from '../constants.js';
 
-// monetization.onetimeproducts — replaces the sunset `inappproducts` resource
-// (2024 Google Play migration; see constants.ts REGIONS_VERSION comment).
+// monetization.onetimeproducts — replaces the sunset `inappproducts` resource.
 // Legacy field renames: sku -> productId, status -> state, defaultPrice ->
 // per-region prices inside purchaseOptions[].regionalPricingAndAvailabilityConfigs,
 // listings map -> listings array (languageCode field instead of a map key).
+//
+// PATH CASING IS NOT UNIFORM — verified against Google's own discovery doc
+// (`https://androidpublisher.googleapis.com/$discovery/rest?version=v3`,
+// NOT the human-readable API reference pages, which say something different
+// and are wrong on this point): list/get/delete/batchGet/batchUpdate use
+// `oneTimeProducts` (camelCase), but `patch` specifically uses
+// `onetimeproducts` (all lowercase). There is also NO `monetization/` path
+// segment — despite the resource being namespaced as
+// `androidpublisher.monetization.onetimeproducts.*`, the URL itself is just
+// `applications/{packageName}/oneTimeProducts`. Confirmed 2026-08-12 by
+// curling the endpoint directly (a 404 HTML page, even with a bogus auth
+// token, proved the URL itself was wrong before any 403 permission check
+// could even run) and cross-checking the discovery JSON. If touching these
+// paths again, re-fetch the discovery doc — don't trust AI-summarized web
+// docs for exact path casing on this resource.
 
 interface Money {
   currencyCode: string;
-  units: string;
+  // Both optional — Google's proto3 JSON omits fields at their zero value,
+  // so a whole-dollar-free price like $0.99 (units=0) arrives with no
+  // `units` key at all, and an even-dollar price like $5.00 (nanos=0)
+  // arrives with no `nanos` key. See formatPrice().
+  units?: string;
   nanos?: number;
 }
 
@@ -32,7 +50,9 @@ interface BuyOption {
 
 interface PurchaseOption {
   purchaseOptionId: string;
-  state: string;
+  // Output only on the resource — cannot be set via PATCH. Change it with
+  // purchaseOptions:batchUpdateStates instead (see activatePurchaseOption).
+  state?: string;
   buyOption?: BuyOption;
   regionalPricingAndAvailabilityConfigs?: RegionalPricingAndAvailabilityConfig[];
 }
@@ -49,9 +69,26 @@ interface OneTimeProductsListResponse {
   nextPageToken?: string;
 }
 
+function oneTimeProductsPath(pkg: string): string {
+  return `/applications/${pkg}/oneTimeProducts`;
+}
+
+// The one path that deliberately does NOT match the others — see the file
+// header comment. Do not "fix" this to match oneTimeProductsPath().
+function patchPath(pkg: string, productId: string): string {
+  return `/applications/${pkg}/onetimeproducts/${productId}`;
+}
+
 function formatPrice(price?: Money): string {
   if (!price) return '-';
-  const amount = (parseInt(price.units, 10) + (price.nanos || 0) / 1_000_000_000).toFixed(2);
+  // Money is a proto3 message — Google omits fields at their zero value
+  // (units: "0", nanos: 0) from the JSON entirely, they don't come back as
+  // "0". Confirmed live 2026-08-12: a $0.99 price (units=0) arrived with no
+  // `units` key at all, which made parseInt(undefined, 10) => NaN. Default
+  // both to 0 explicitly.
+  const units = price.units ? parseInt(price.units, 10) : 0;
+  const nanos = price.nanos || 0;
+  const amount = (units + nanos / 1_000_000_000).toFixed(2);
   return `${amount} ${price.currencyCode}`;
 }
 
@@ -84,7 +121,7 @@ export async function listProducts(): Promise<string> {
     if (pageToken) params.pageToken = pageToken;
 
     const result = await gpcGet<OneTimeProductsListResponse>(
-      `/applications/${pkg}/monetization/onetimeproducts`,
+      oneTimeProductsPath(pkg),
       params,
     );
 
@@ -116,7 +153,7 @@ export async function listProducts(): Promise<string> {
 export async function getProduct(productId: string): Promise<string> {
   const pkg = getPackageName();
   const product = await gpcGet<OneTimeProduct>(
-    `/applications/${pkg}/monetization/onetimeproducts/${productId}`,
+    `${oneTimeProductsPath(pkg)}/${productId}`,
   );
 
   let md = `## In-App Product: ${productId}\n\n`;
@@ -150,6 +187,32 @@ export async function getProduct(productId: string): Promise<string> {
   return md;
 }
 
+// `state` is output-only on the resource (Google's discovery schema marks
+// OneTimeProductPurchaseOption.state readOnly) — it cannot be set via PATCH.
+// This is the dedicated endpoint for it. New purchase options are created in
+// DRAFT and stay unpurchasable until this is called.
+async function activatePurchaseOption(productId: string, purchaseOptionId: string): Promise<void> {
+  const pkg = getPackageName();
+  await gpcPost(`${oneTimeProductsPath(pkg)}/${productId}/purchaseOptions:batchUpdateStates`, {
+    requests: [
+      {
+        activatePurchaseOptionRequest: { packageName: pkg, productId, purchaseOptionId },
+      },
+    ],
+  });
+}
+
+async function deactivatePurchaseOption(productId: string, purchaseOptionId: string): Promise<void> {
+  const pkg = getPackageName();
+  await gpcPost(`${oneTimeProductsPath(pkg)}/${productId}/purchaseOptions:batchUpdateStates`, {
+    requests: [
+      {
+        deactivatePurchaseOptionRequest: { packageName: pkg, productId, purchaseOptionId },
+      },
+    ],
+  });
+}
+
 export async function createProduct(
   productId: string,
   defaultLanguage: string,
@@ -162,6 +225,7 @@ export async function createProduct(
 ): Promise<string> {
   const pkg = getPackageName();
   const price = microsToMoney(priceMicros, currency);
+  const purchaseOptionId = `${productId}-base`;
 
   const body: OneTimeProduct = {
     packageName: pkg,
@@ -169,8 +233,7 @@ export async function createProduct(
     listings: [{ languageCode: defaultLanguage, title, description }],
     purchaseOptions: [
       {
-        purchaseOptionId: `${productId}-base`,
-        state: 'ACTIVE',
+        purchaseOptionId,
         buyOption: { legacyCompatible: true, multiQuantityEnabled: consumable },
         regionalPricingAndAvailabilityConfigs: [
           { regionCode, price, availability: 'AVAILABLE' },
@@ -180,7 +243,7 @@ export async function createProduct(
   };
 
   await gpcPatch(
-    `/applications/${pkg}/monetization/onetimeproducts/${productId}`,
+    patchPath(pkg, productId),
     body,
     {
       updateMask: 'listings,purchaseOptions',
@@ -188,6 +251,10 @@ export async function createProduct(
       'regionsVersion.version': REGIONS_VERSION,
     },
   );
+
+  // New purchase options are created DRAFT — activate so it's purchasable,
+  // matching the old inappproducts behavior (`status: 'active'` at creation).
+  await activatePurchaseOption(productId, purchaseOptionId);
 
   let md = `## Product Created\n\n`;
   md += `| Field | Value |\n`;
@@ -197,6 +264,7 @@ export async function createProduct(
   md += `| **Type** | ${consumable ? 'Consumable (multi-quantity)' : 'Non-consumable (one-time)'} |\n`;
   md += `| **Price** | ${formatPrice(price)} (${regionCode}) |\n`;
   md += `| **Language** | ${defaultLanguage} |\n`;
+  md += `| **State** | ACTIVE |\n`;
   md += `\n**Note:** price was only set for \`${regionCode}\` — other regions have no price/availability yet. Call `;
   md += `\`gpc_update_product\` again with a different \`regionCode\` to add more, or set pricing per-region from the Play Console UI.`;
 
@@ -212,12 +280,13 @@ export async function updateProduct(
     priceMicros?: string;
     currency?: string;
     regionCode?: string;
+    active?: boolean;
   },
 ): Promise<string> {
   const pkg = getPackageName();
 
   const current = await gpcGet<OneTimeProduct>(
-    `/applications/${pkg}/monetization/onetimeproducts/${productId}`,
+    `${oneTimeProductsPath(pkg)}/${productId}`,
   );
 
   const maskParts: string[] = [];
@@ -255,18 +324,35 @@ export async function updateProduct(
     }
   }
 
-  if (maskParts.length === 0) {
-    return `## No Changes\n\nNo updatable fields were provided for \`${productId}\`.`;
+  if (maskParts.length > 0) {
+    // `state` is read-only even here — strip it defensively so a stray
+    // value read back from GET is never sent in a write body.
+    for (const po of current.purchaseOptions) delete po.state;
+
+    await gpcPatch(
+      patchPath(pkg, productId),
+      current,
+      {
+        updateMask: maskParts.join(','),
+        'regionsVersion.version': REGIONS_VERSION,
+      },
+    );
   }
 
-  await gpcPatch(
-    `/applications/${pkg}/monetization/onetimeproducts/${productId}`,
-    current,
-    {
-      updateMask: maskParts.join(','),
-      'regionsVersion.version': REGIONS_VERSION,
-    },
-  );
+  if (updates.active !== undefined) {
+    const purchaseOptionId = current.purchaseOptions[0]?.purchaseOptionId;
+    if (purchaseOptionId) {
+      if (updates.active) {
+        await activatePurchaseOption(productId, purchaseOptionId);
+      } else {
+        await deactivatePurchaseOption(productId, purchaseOptionId);
+      }
+    }
+  }
+
+  if (maskParts.length === 0 && updates.active === undefined) {
+    return `## No Changes\n\nNo updatable fields were provided for \`${productId}\`.`;
+  }
 
   let md = `## Product Updated: ${productId}\n\n`;
   md += `| Updated Field | New Value |\n`;
@@ -279,13 +365,16 @@ export async function updateProduct(
   if (updates.priceMicros && updates.currency && updates.regionCode) {
     md += `| **Price (${updates.regionCode})** | ${formatPrice(microsToMoney(updates.priceMicros, updates.currency))} |\n`;
   }
+  if (updates.active !== undefined) {
+    md += `| **State** | ${updates.active ? 'ACTIVE' : 'INACTIVE'} |\n`;
+  }
 
   return md;
 }
 
 export async function deleteProduct(productId: string): Promise<string> {
   const pkg = getPackageName();
-  await gpcDelete(`/applications/${pkg}/monetization/onetimeproducts/${productId}`);
+  await gpcDelete(`${oneTimeProductsPath(pkg)}/${productId}`);
   return `## Product Deleted\n\nIn-app product \`${productId}\` has been deleted.`;
 }
 

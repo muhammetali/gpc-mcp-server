@@ -20,9 +20,11 @@ describe('tools/products (monetization.onetimeproducts)', () => {
   });
 
   describe('listProducts', () => {
-    it('should list products in markdown table', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+    it('should list products in markdown table via the oneTimeProducts (camelCase) path', async () => {
+      let capturedUrl = '';
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        capturedUrl = url;
+        return Promise.resolve(new Response(JSON.stringify({
           oneTimeProducts: [
             {
               packageName: 'com.fixmob.vipchat',
@@ -51,12 +53,14 @@ describe('tools/products (monetization.onetimeproducts)', () => {
               }],
             },
           ],
-        }), { status: 200 }),
-      );
+        }), { status: 200 }));
+      });
 
       const { listProducts } = await import('../tools/products.js');
       const result = await listProducts();
 
+      expect(capturedUrl).toContain('/applications/com.fixmob.vipchat/oneTimeProducts');
+      expect(capturedUrl).not.toContain('/monetization/');
       expect(result).toContain('## In-App Products (2)');
       expect(result).toContain('premium_unlock');
       expect(result).toContain('Premium Unlock');
@@ -114,9 +118,11 @@ describe('tools/products (monetization.onetimeproducts)', () => {
   });
 
   describe('getProduct', () => {
-    it('should return product details with listings and regional pricing', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+    it('should return product details via the oneTimeProducts (camelCase) path', async () => {
+      let capturedUrl = '';
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        capturedUrl = url;
+        return Promise.resolve(new Response(JSON.stringify({
           packageName: 'com.fixmob.vipchat',
           productId: 'premium_unlock',
           listings: [
@@ -131,12 +137,14 @@ describe('tools/products (monetization.onetimeproducts)', () => {
               { regionCode: 'TR', price: { currencyCode: 'TRY', units: '149', nanos: 0 }, availability: 'AVAILABLE' },
             ],
           }],
-        }), { status: 200 }),
-      );
+        }), { status: 200 }));
+      });
 
       const { getProduct } = await import('../tools/products.js');
       const result = await getProduct('premium_unlock');
 
+      expect(capturedUrl).toContain('/applications/com.fixmob.vipchat/oneTimeProducts/premium_unlock');
+      expect(capturedUrl).not.toContain('/monetization/');
       expect(result).toContain('## In-App Product: premium_unlock');
       expect(result).toContain('4.99 USD');
       expect(result).toContain('### Listings');
@@ -145,17 +153,61 @@ describe('tools/products (monetization.onetimeproducts)', () => {
       expect(result).toContain('### Regional Pricing');
       expect(result).toContain('149.00 TRY');
     });
+
+    it('should format a sub-$1 price correctly when Google omits the zero-value "units" field (regression: NaN, found live 2026-08-12)', async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({
+          packageName: 'com.fixmob.vipchat',
+          productId: 'gold_1000',
+          listings: [{ languageCode: 'en-US', title: '1,000 Gold', description: '1,000 Gold for gifts and games' }],
+          purchaseOptions: [{
+            purchaseOptionId: 'defaultbuy',
+            state: 'ACTIVE',
+            // Real Google response shape for $0.99: proto3 omits `units`
+            // entirely because its value (0) is the field's zero-default.
+            regionalPricingAndAvailabilityConfigs: [
+              { regionCode: 'US', price: { currencyCode: 'USD', nanos: 990000000 }, availability: 'AVAILABLE' },
+            ],
+          }],
+        }), { status: 200 }),
+      );
+
+      const { getProduct } = await import('../tools/products.js');
+      const result = await getProduct('gold_1000');
+
+      expect(result).not.toContain('NaN');
+      expect(result).toContain('0.99 USD');
+    });
+
+    it('should format an even-dollar price correctly when Google omits the zero-value "nanos" field', async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({
+          packageName: 'com.fixmob.vipchat',
+          productId: 'gold_5000',
+          listings: [{ languageCode: 'en-US', title: '5,000 Gold', description: '-' }],
+          purchaseOptions: [{
+            purchaseOptionId: 'defaultbuy',
+            state: 'ACTIVE',
+            regionalPricingAndAvailabilityConfigs: [
+              { regionCode: 'US', price: { currencyCode: 'USD', units: '5' }, availability: 'AVAILABLE' },
+            ],
+          }],
+        }), { status: 200 }),
+      );
+
+      const { getProduct } = await import('../tools/products.js');
+      const result = await getProduct('gold_5000');
+
+      expect(result).not.toContain('NaN');
+      expect(result).toContain('5.00 USD');
+    });
   });
 
   describe('createProduct', () => {
-    it('should create product via PATCH with allowMissing + regionsVersion and return confirmation', async () => {
-      let capturedUrl = '';
-      let capturedMethod = '';
-      let capturedBody: any;
+    it('should PATCH the product (lowercase path, no state in body) then activate the purchase option', async () => {
+      const calls: Array<{ url: string; method: string; body: any }> = [];
       global.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
-        capturedUrl = url;
-        capturedMethod = opts.method;
-        capturedBody = JSON.parse(opts.body);
+        calls.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : undefined });
         return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
       });
 
@@ -164,30 +216,47 @@ describe('tools/products (monetization.onetimeproducts)', () => {
         'new_item', 'en-US', 'New Item', 'A great item', true, 'US', '1990000', 'USD',
       );
 
-      expect(capturedMethod).toBe('PATCH');
-      expect(capturedUrl).toContain('/monetization/onetimeproducts/new_item');
-      expect(capturedUrl).toContain('allowMissing=true');
-      expect(capturedUrl).toContain('updateMask=listings%2CpurchaseOptions');
-      expect(capturedUrl).toContain('regionsVersion.version=2022%2F02');
-      expect(capturedBody.productId).toBe('new_item');
-      expect(capturedBody.listings[0]).toEqual({ languageCode: 'en-US', title: 'New Item', description: 'A great item' });
-      expect(capturedBody.purchaseOptions[0].buyOption.multiQuantityEnabled).toBe(true);
-      expect(capturedBody.purchaseOptions[0].regionalPricingAndAvailabilityConfigs[0]).toEqual({
+      expect(calls).toHaveLength(2);
+
+      // Step 1: PATCH create (lowercase "onetimeproducts", no /monetization/ segment)
+      const patchCall = calls[0];
+      expect(patchCall.method).toBe('PATCH');
+      expect(patchCall.url).toContain('/applications/com.fixmob.vipchat/onetimeproducts/new_item');
+      expect(patchCall.url).not.toContain('/monetization/');
+      expect(patchCall.url).toContain('allowMissing=true');
+      expect(patchCall.url).toContain('updateMask=listings%2CpurchaseOptions');
+      expect(patchCall.url).toContain('regionsVersion.version=2022%2F02');
+      expect(patchCall.body.productId).toBe('new_item');
+      expect(patchCall.body.listings[0]).toEqual({ languageCode: 'en-US', title: 'New Item', description: 'A great item' });
+      expect(patchCall.body.purchaseOptions[0].state).toBeUndefined();
+      expect(patchCall.body.purchaseOptions[0].buyOption.multiQuantityEnabled).toBe(true);
+      expect(patchCall.body.purchaseOptions[0].regionalPricingAndAvailabilityConfigs[0]).toEqual({
         regionCode: 'US',
         price: { currencyCode: 'USD', units: '1', nanos: 990000000 },
         availability: 'AVAILABLE',
+      });
+
+      // Step 2: activate via purchaseOptions:batchUpdateStates (camelCase oneTimeProducts, POST)
+      const activateCall = calls[1];
+      expect(activateCall.method).toBe('POST');
+      expect(activateCall.url).toContain('/applications/com.fixmob.vipchat/oneTimeProducts/new_item/purchaseOptions:batchUpdateStates');
+      expect(activateCall.body.requests[0].activatePurchaseOptionRequest).toEqual({
+        packageName: 'com.fixmob.vipchat',
+        productId: 'new_item',
+        purchaseOptionId: 'new_item-base',
       });
 
       expect(result).toContain('## Product Created');
       expect(result).toContain('new_item');
       expect(result).toContain('1.99 USD');
       expect(result).toContain('Consumable');
+      expect(result).toContain('ACTIVE');
     });
 
     it('should mark non-consumable products correctly (multiQuantityEnabled: false)', async () => {
       let capturedBody: any;
-      global.fetch = vi.fn().mockImplementation((_url: string, opts: any) => {
-        capturedBody = JSON.parse(opts.body);
+      global.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
+        if (opts.method === 'PATCH') capturedBody = JSON.parse(opts.body);
         return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
       });
 
@@ -202,7 +271,7 @@ describe('tools/products (monetization.onetimeproducts)', () => {
   });
 
   describe('updateProduct', () => {
-    it('should update product title via PATCH with listings-only updateMask', async () => {
+    it('should update product title via PATCH (lowercase path) with listings-only updateMask', async () => {
       let callCount = 0;
       let patchUrl = '';
       let patchBody: any;
@@ -230,9 +299,12 @@ describe('tools/products (monetization.onetimeproducts)', () => {
       const { updateProduct } = await import('../tools/products.js');
       const result = await updateProduct('premium_unlock', { title: 'New Title' });
 
+      expect(patchUrl).toContain('/applications/com.fixmob.vipchat/onetimeproducts/premium_unlock');
       expect(patchUrl).toContain('updateMask=listings');
       expect(patchUrl).not.toContain('purchaseOptions');
       expect(patchBody.listings[0].title).toBe('New Title');
+      // state must never be sent back, even though it came back on the GET
+      expect(patchBody.purchaseOptions[0].state).toBeUndefined();
       expect(result).toContain('## Product Updated: premium_unlock');
       expect(result).toContain('New Title');
     });
@@ -352,6 +424,64 @@ describe('tools/products (monetization.onetimeproducts)', () => {
       expect(configs.find((c: any) => c.regionCode === 'TR').price.currencyCode).toBe('TRY');
     });
 
+    it('should activate the purchase option via batchUpdateStates when active: true, without touching listings/price', async () => {
+      let callCount = 0;
+      let activateCall: { url: string; body: any } | undefined;
+      global.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({
+            packageName: 'com.fixmob.vipchat',
+            productId: 'premium_unlock',
+            listings: [{ languageCode: 'en-US', title: 'Premium', description: 'Desc' }],
+            purchaseOptions: [{ purchaseOptionId: 'premium_unlock-base', state: 'INACTIVE' }],
+          }), { status: 200 }));
+        }
+        activateCall = { url, body: JSON.parse(opts.body) };
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { updateProduct } = await import('../tools/products.js');
+      const result = await updateProduct('premium_unlock', { active: true });
+
+      expect(callCount).toBe(2); // GET + activate only, no PATCH
+      expect(activateCall!.url).toContain('/oneTimeProducts/premium_unlock/purchaseOptions:batchUpdateStates');
+      expect(activateCall!.body.requests[0].activatePurchaseOptionRequest).toEqual({
+        packageName: 'com.fixmob.vipchat',
+        productId: 'premium_unlock',
+        purchaseOptionId: 'premium_unlock-base',
+      });
+      expect(result).toContain('ACTIVE');
+    });
+
+    it('should deactivate the purchase option via batchUpdateStates when active: false', async () => {
+      let callCount = 0;
+      let deactivateCall: { url: string; body: any } | undefined;
+      global.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({
+            packageName: 'com.fixmob.vipchat',
+            productId: 'premium_unlock',
+            listings: [{ languageCode: 'en-US', title: 'Premium', description: 'Desc' }],
+            purchaseOptions: [{ purchaseOptionId: 'premium_unlock-base', state: 'ACTIVE' }],
+          }), { status: 200 }));
+        }
+        deactivateCall = { url, body: JSON.parse(opts.body) };
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+      });
+
+      const { updateProduct } = await import('../tools/products.js');
+      const result = await updateProduct('premium_unlock', { active: false });
+
+      expect(deactivateCall!.body.requests[0].deactivatePurchaseOptionRequest).toEqual({
+        packageName: 'com.fixmob.vipchat',
+        productId: 'premium_unlock',
+        purchaseOptionId: 'premium_unlock-base',
+      });
+      expect(result).toContain('INACTIVE');
+    });
+
     it('should propagate a 404 GPCClientError when the product does not exist', async () => {
       global.fetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({
@@ -382,7 +512,7 @@ describe('tools/products (monetization.onetimeproducts)', () => {
   });
 
   describe('deleteProduct', () => {
-    it('should delete product by productId and confirm', async () => {
+    it('should delete product by productId via the oneTimeProducts (camelCase) path', async () => {
       let capturedUrl = '';
       global.fetch = vi.fn().mockImplementation((url: string) => {
         capturedUrl = url;
@@ -392,7 +522,8 @@ describe('tools/products (monetization.onetimeproducts)', () => {
       const { deleteProduct } = await import('../tools/products.js');
       const result = await deleteProduct('old_item');
 
-      expect(capturedUrl).toContain('/monetization/onetimeproducts/old_item');
+      expect(capturedUrl).toContain('/applications/com.fixmob.vipchat/oneTimeProducts/old_item');
+      expect(capturedUrl).not.toContain('/monetization/');
       expect(result).toContain('## Product Deleted');
       expect(result).toContain('old_item');
     });
