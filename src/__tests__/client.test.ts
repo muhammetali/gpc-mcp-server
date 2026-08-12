@@ -213,6 +213,55 @@ describe('client', () => {
     });
   });
 
+  describe('gpcPatch', () => {
+    it('should send PATCH request with JSON body', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({}), { status: 200 })
+      );
+      global.fetch = mockFetch;
+
+      const { gpcPatch } = await import('../client.js');
+      await gpcPatch('/path', { title: 'New Title' });
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).not.toContain('?');
+      expect(options.method).toBe('PATCH');
+      expect(JSON.parse(options.body)).toEqual({ title: 'New Title' });
+    });
+
+    it('should append query params when provided (e.g. updateMask)', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({}), { status: 200 })
+      );
+      global.fetch = mockFetch;
+
+      const { gpcPatch } = await import('../client.js');
+      await gpcPatch('/path', { title: 'x' }, {
+        updateMask: 'listings,purchaseOptions',
+        allowMissing: 'true',
+        'regionsVersion.version': '2022/02',
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('updateMask=listings%2CpurchaseOptions');
+      expect(url).toContain('allowMissing=true');
+      expect(url).toContain('regionsVersion.version=2022%2F02');
+    });
+
+    it('should omit the query string entirely when no params are given', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({}), { status: 200 })
+      );
+      global.fetch = mockFetch;
+
+      const { gpcPatch } = await import('../client.js');
+      await gpcPatch('/path', { title: 'x' });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url.endsWith('/path')).toBe(true);
+    });
+  });
+
   describe('gpcDelete', () => {
     it('should send DELETE and handle 204', async () => {
       const mockFetch = vi.fn().mockResolvedValue(
@@ -226,6 +275,19 @@ describe('client', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toContain('/images/123');
       expect(options.method).toBe('DELETE');
+    });
+
+    it('should append query params when provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(null, { status: 204 })
+      );
+      global.fetch = mockFetch;
+
+      const { gpcDelete } = await import('../client.js');
+      await gpcDelete('/applications/com.test/onetimeproducts/x', { allowMissing: 'true' });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('allowMissing=true');
     });
   });
 

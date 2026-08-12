@@ -41,3 +41,11 @@ export const UPLOAD_BASE_URL = 'https://androidpublisher.googleapis.com/upload/a
 export const MAX_BUNDLE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB (Google Play limit)
 export const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 export const MAX_MAPPING_SIZE_BYTES = 300 * 1024 * 1024; // 300 MB
+
+// monetization.onetimeproducts (2026-08-12 migration off the sunset
+// `inappproducts` resource — see https://developers.google.com/android-publisher/api-ref/rest/v3/monetization.onetimeproducts).
+// `regionsVersion.version` is required on every write; Google increments it
+// only when the supported-region set substantially changes, so this stays
+// valid for a long time — bump it if Google's docs (RegionsVersion type
+// page) ever publish a newer value.
+export const REGIONS_VERSION = '2022/02';

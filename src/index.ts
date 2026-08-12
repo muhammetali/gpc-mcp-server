@@ -501,7 +501,7 @@ server.tool(
 
 server.tool(
   'gpc_list_products',
-  'List all in-app products (managed products and legacy subscriptions) with SKU, price, and status.',
+  'List all in-app products (one-time products via the monetization.onetimeproducts API) with product ID, price, and state.',
   {},
   async () => {
     try {
@@ -515,13 +515,13 @@ server.tool(
 
 server.tool(
   'gpc_get_product',
-  'Get detailed information about a specific in-app product by SKU.',
+  'Get detailed information about a specific in-app product by product ID, including all localized listings and per-region prices.',
   {
-    sku: z.string().describe('Product SKU/ID (from gpc_list_products)'),
+    productId: z.string().describe('Product ID (from gpc_list_products)'),
   },
-  async ({ sku }) => {
+  async ({ productId }) => {
     try {
-      const result = await getProduct(sku);
+      const result = await getProduct(productId);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
@@ -531,19 +531,20 @@ server.tool(
 
 server.tool(
   'gpc_create_product',
-  'Create a new in-app product. Price is in micros (e.g., "990000" = $0.99).',
+  'Create a new in-app product (one-time product). Price is in micros (e.g., "990000" = $0.99) and is only set for the given region — call gpc_update_product with a different regionCode to add pricing for other regions.',
   {
-    sku: z.string().describe('Unique product ID/SKU'),
+    productId: z.string().describe('Unique product ID'),
     defaultLanguage: z.string().describe('Default language code (e.g., "en-US")'),
     title: z.string().describe('Product title'),
     description: z.string().describe('Product description'),
-    purchaseType: z.enum(['managedUser', 'subscription']).describe('Product type: managedUser (one-time) or subscription (legacy)'),
+    consumable: z.boolean().describe('true = can be purchased repeatedly (e.g. gold packs); false = one-time/non-consumable'),
+    regionCode: z.string().describe('ISO region code for the initial price (e.g., "US", "TR")'),
     priceMicros: z.string().describe('Price in micros (1,000,000 = $1.00). E.g., "990000" for $0.99'),
-    currency: z.string().describe('Currency code (e.g., "USD", "TRY", "EUR")'),
+    currency: z.string().describe('Currency code matching regionCode (e.g., "USD" for US, "TRY" for TR)'),
   },
-  async ({ sku, defaultLanguage, title, description, purchaseType, priceMicros, currency }) => {
+  async ({ productId, defaultLanguage, title, description, consumable, regionCode, priceMicros, currency }) => {
     try {
-      const result = await createProduct(sku, defaultLanguage, title, description, purchaseType, priceMicros, currency);
+      const result = await createProduct(productId, defaultLanguage, title, description, consumable, regionCode, priceMicros, currency);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
@@ -553,18 +554,19 @@ server.tool(
 
 server.tool(
   'gpc_update_product',
-  'Update an existing in-app product (title, description, price).',
+  'Update an existing in-app product (title, description, and/or the price for one region).',
   {
-    sku: z.string().describe('Product SKU/ID to update'),
+    productId: z.string().describe('Product ID to update'),
     title: z.string().optional().describe('New title'),
     description: z.string().optional().describe('New description'),
-    priceMicros: z.string().optional().describe('New price in micros'),
-    currency: z.string().optional().describe('Currency code (required if priceMicros is set)'),
-    defaultLanguage: z.string().optional().describe('Language code for the listing to update'),
+    defaultLanguage: z.string().optional().describe('Language code for the listing to update (defaults to the product\'s primary listing)'),
+    priceMicros: z.string().optional().describe('New price in micros (requires currency and regionCode too)'),
+    currency: z.string().optional().describe('Currency code matching regionCode (required if priceMicros is set)'),
+    regionCode: z.string().optional().describe('ISO region code the price applies to, e.g. "US" (required if priceMicros is set)'),
   },
-  async ({ sku, ...updates }) => {
+  async ({ productId, ...updates }) => {
     try {
-      const result = await updateProduct(sku, updates);
+      const result = await updateProduct(productId, updates);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };
@@ -574,13 +576,13 @@ server.tool(
 
 server.tool(
   'gpc_delete_product',
-  'Delete an in-app product by SKU. This action cannot be undone.',
+  'Delete an in-app product by product ID. This action cannot be undone.',
   {
-    sku: z.string().describe('Product SKU/ID to delete'),
+    productId: z.string().describe('Product ID to delete'),
   },
-  async ({ sku }) => {
+  async ({ productId }) => {
     try {
-      const result = await deleteProduct(sku);
+      const result = await deleteProduct(productId);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };

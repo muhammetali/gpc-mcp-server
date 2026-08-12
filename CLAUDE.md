@@ -32,7 +32,7 @@ src/
     ├── images.ts     # Screenshots: list, upload, delete, deleteAll
     ├── bundles.ts    # Bundle upload, combined AAB upload+release, mapping files
     ├── reports.ts    # Acquisition and crash reports
-    ├── products.ts   # In-app products CRUD
+    ├── products.ts   # One-time products CRUD (monetization.onetimeproducts — see §Known migrations)
     ├── subscriptions.ts # Subscription CRUD
     ├── offers.ts     # Base plan management, subscription offers
     ├── purchases.ts  # Purchase verification, subscription purchase management, voided purchases
@@ -69,3 +69,53 @@ src/
 - Constants module is the single source of truth for supported locales (7), tracks (4), and image types (8)
 - Price values use micros format (1,000,000 = $1.00)
 - ISO 8601 durations for billing periods (P1M = monthly, P1Y = yearly)
+
+## Known migrations (read before touching a tool that suddenly 403s)
+
+Google periodically sunsets Play Developer API resources. When a tool that
+used to work starts failing with a 403 whose message says "Please migrate to
+the new publishing API" (or similar), **do not** assume it's a Play Console
+permission problem — check the service account's role in Play Console first
+(Setup → API access), but if it already has Admin/Release manager (it does,
+for this project's `play-store-mcp@vip-chat-dc3b3.iam.gserviceaccount.com`
+service account — verified 2026-08-12), the real cause is almost always that
+this repo's code is still calling a **deprecated REST resource**, not a
+permission gap. Fix it here, in this repo, then commit+push — don't chase it
+in Play Console.
+
+### 2026-08-12 — `inappproducts` → `monetization.onetimeproducts`
+
+Google sunset the legacy `inappproducts` resource (used by `products.ts` for
+one-time/managed in-app products) in favor of `monetization.onetimeproducts`.
+This was NOT a simple path rename — the data model changed substantially:
+
+| Legacy (`inappproducts`) | New (`monetization.onetimeproducts`) |
+|---|---|
+| `sku` | `productId` |
+| `status: 'active'/'inactive'` | `purchaseOptions[].state: 'DRAFT'\|'ACTIVE'\|'INACTIVE'\|'INACTIVE_PUBLISHED'` |
+| `listings: { [lang]: {title, description} }` (map) | `listings: [{languageCode, title, description}]` (array) |
+| `defaultPrice: {priceMicros, currency}` (one global price) | `purchaseOptions[].regionalPricingAndAvailabilityConfigs[]` — price is **per-region**, there is no single global price |
+| `purchaseType: 'managedUser'\|'subscription'` | subscriptions were already split into their own `subscriptions.ts` (different, non-deprecated API); `purchaseOptions[].buyOption.multiQuantityEnabled` now distinguishes consumable (`true`) vs non-consumable (`false`) |
+| `POST` to create, `PUT` to update | **`PATCH` for both** — create is `PATCH .../onetimeproducts/{productId}?allowMissing=true&updateMask=...&regionsVersion.version=2022/02`; update uses the same PATCH with only the changed top-level fields in `updateMask` (e.g. `listings` or `purchaseOptions` or both, comma-joined) |
+| — | `regionsVersion.version` is a **required** query param on every write (constants.ts `REGIONS_VERSION`); Google only bumps this when the supported-region set changes substantially, so it's safe to hardcode and rarely needs updating |
+
+`client.ts`'s `gpcPatch`/`gpcDelete` gained an optional `params` argument
+(query string, same pattern as `gpcGet`) specifically to support
+`updateMask`/`allowMissing`/`regionsVersion.version` — reuse that pattern
+for any other resource that turns out to need query params on a mutation.
+
+`createProduct`/`updateProduct` only set price for ONE region per call
+(the API is fundamentally per-region now, unlike the old single global
+price) — callers must call `gpc_update_product` again with a different
+`regionCode` to add pricing elsewhere. `newRegionsConfig` (Google's
+"default price for regions I haven't configured yet" field, which only
+accepts USD/EUR reference prices) was deliberately NOT implemented — out
+of scope, would need currency-conversion logic this server has no business
+doing.
+
+Source: official Google Play Developer API docs — see git log for this
+change (commit message links the exact reference pages used). If a similar
+403 shows up for another resource (`subscriptions`, `purchases`, `orders`),
+apply the same diagnostic: read the error message literally, check Play
+Console permissions ONCE to rule it out, then assume deprecated-endpoint
+and go find that resource's current REST reference page.

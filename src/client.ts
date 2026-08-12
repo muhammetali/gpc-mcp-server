@@ -162,8 +162,18 @@ export async function gpcPut<T = any>(path: string, body: any): Promise<T> {
   return handleResponse<T>(response);
 }
 
-export async function gpcPatch<T = any>(path: string, body: any): Promise<T> {
-  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+export async function gpcPatch<T = any>(
+  path: string,
+  body: any,
+  params?: Record<string, string>,
+): Promise<T> {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v);
+    }
+  }
+  const response = await fetchWithRetry(url.toString(), {
     method: 'PATCH',
     headers: await authHeaders(),
     body: JSON.stringify(body),
@@ -171,8 +181,14 @@ export async function gpcPatch<T = any>(path: string, body: any): Promise<T> {
   return handleResponse<T>(response);
 }
 
-export async function gpcDelete(path: string): Promise<void> {
-  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+export async function gpcDelete(path: string, params?: Record<string, string>): Promise<void> {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v);
+    }
+  }
+  const response = await fetchWithRetry(url.toString(), {
     method: 'DELETE',
     headers: await authHeaders(),
   }, DEFAULT_TIMEOUT_MS);
