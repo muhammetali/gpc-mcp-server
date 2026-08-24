@@ -196,6 +196,109 @@ describe('client', () => {
       expect(options.method).toBe('POST');
       expect(options.body).toBeUndefined();
     });
+
+    it('appends query string parameters when provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response('{}', { status: 200 }),
+      );
+      global.fetch = mockFetch;
+
+      const { gpcPost } = await import('../client.js');
+      await gpcPost('/applications/com.test/edits/123:commit', undefined, {
+        changesNotSentForReview: 'true',
+      });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(String(url)).toContain('changesNotSentForReview=true');
+    });
+
+    it('omits the query string entirely when no params supplied', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response('{}', { status: 200 }),
+      );
+      global.fetch = mockFetch;
+
+      const { gpcPost } = await import('../client.js');
+      await gpcPost('/applications/com.test/edits');
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(String(url)).not.toContain('?');
+    });
+  });
+
+  describe('commitEdit', () => {
+    // Regression guard for the 2026-04 Play API change: every :commit now
+    // must carry `changesNotSentForReview=true` or Google rejects with
+    // 400 INVALID_ARGUMENT. We default to true so older callers keep
+    // working without touching every call site.
+    it('defaults to changesNotSentForReview=true', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response('{}', { status: 200 }),
+      );
+      global.fetch = mockFetch;
+
+      const { commitEdit } = await import('../client.js');
+      await commitEdit('edit-42');
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(options.method).toBe('POST');
+      expect(String(url)).toContain('edits/edit-42:commit');
+      expect(String(url)).toContain('changesNotSentForReview=true');
+    });
+
+    it('can be opted-out explicitly', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response('{}', { status: 200 }),
+      );
+      global.fetch = mockFetch;
+
+      const { commitEdit } = await import('../client.js');
+      await commitEdit('edit-43', { changesNotSentForReview: false });
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(String(url)).not.toContain('changesNotSentForReview');
+    });
+
+    // Regression guard: Google rejects changesNotSentForReview on an app's
+    // first-ever production submission (no prior reviewed release to stage
+    // against). commitEdit should transparently retry without the param
+    // instead of surfacing this as a failure to every caller.
+    it('retries without changesNotSentForReview on the first-submission 400', async () => {
+      const rejectionBody = JSON.stringify({
+        error: {
+          code: 400,
+          message:
+            'Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.',
+          status: 'INVALID_ARGUMENT',
+        },
+      });
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(rejectionBody, { status: 400 }))
+        .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+      global.fetch = mockFetch;
+
+      const { commitEdit } = await import('../client.js');
+      await commitEdit('edit-44');
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const [firstUrl] = mockFetch.mock.calls[0];
+      const [secondUrl] = mockFetch.mock.calls[1];
+      expect(String(firstUrl)).toContain('changesNotSentForReview=true');
+      expect(String(secondUrl)).not.toContain('changesNotSentForReview');
+    });
+
+    it('does not retry other 400 errors', async () => {
+      const rejectionBody = JSON.stringify({
+        error: { code: 400, message: 'Some unrelated failure', status: 'INVALID_ARGUMENT' },
+      });
+      const mockFetch = vi.fn().mockResolvedValue(new Response(rejectionBody, { status: 400 }));
+      global.fetch = mockFetch;
+
+      const { commitEdit } = await import('../client.js');
+      await expect(commitEdit('edit-45')).rejects.toThrow('Some unrelated failure');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('gpcPut', () => {

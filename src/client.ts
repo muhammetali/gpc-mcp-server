@@ -144,8 +144,18 @@ export async function gpcGet<T = any>(path: string, params?: Record<string, stri
   return handleResponse<T>(response);
 }
 
-export async function gpcPost<T = any>(path: string, body?: any): Promise<T> {
-  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+export async function gpcPost<T = any>(
+  path: string,
+  body?: any,
+  params?: Record<string, string>,
+): Promise<T> {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v);
+    }
+  }
+  const response = await fetchWithRetry(url.toString(), {
     method: 'POST',
     headers: await authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
@@ -202,9 +212,55 @@ export async function createEdit(): Promise<string> {
   return result.id;
 }
 
-export async function commitEdit(editId: string): Promise<void> {
+/**
+ * Commits an edit to Google Play.
+ *
+ * Google Play's Publishing API now requires `changesNotSentForReview=true`
+ * on every `:commit` call unless the edit includes track changes that are
+ * guaranteed to be review-safe. Without it the API returns
+ *   400 INVALID_ARGUMENT "Changes cannot be sent for review automatically."
+ * That's the policy Google added in late 2024 — all edits have to be
+ * reviewed explicitly by a human via the Play Console UI before rollout.
+ *
+ * We default to `changesNotSentForReview=true` so every tool that commits
+ * an edit works out-of-the-box; callers that need the older auto-submit
+ * behaviour (if Google ever allows it again on a subset of edits) can
+ * opt out with `{ changesNotSentForReview: false }`.
+ *
+ * See: https://developers.google.com/android-publisher/api-ref/rest/v3/edits/commit
+ */
+export async function commitEdit(
+  editId: string,
+  options: { changesNotSentForReview?: boolean } = {},
+): Promise<void> {
   const pkg = getPackageName();
-  await gpcPost(`/applications/${pkg}/edits/${editId}:commit`);
+  const { changesNotSentForReview = true } = options;
+  try {
+    await gpcPost(
+      `/applications/${pkg}/edits/${editId}:commit`,
+      undefined,
+      changesNotSentForReview
+        ? { changesNotSentForReview: 'true' }
+        : undefined,
+    );
+  } catch (e) {
+    // Google rejects changesNotSentForReview on an app's first-ever
+    // production submission (no prior reviewed release to stage changes
+    // against) with this exact 400. Retry once without the param — for
+    // a first submission all changes are sent for review automatically
+    // anyway, so dropping the flag is the correct behaviour here, not a
+    // workaround.
+    if (
+      changesNotSentForReview &&
+      e instanceof GPCClientError &&
+      e.status === 400 &&
+      e.error.message?.includes('changesNotSentForReview must not be set')
+    ) {
+      await gpcPost(`/applications/${pkg}/edits/${editId}:commit`, undefined, undefined);
+      return;
+    }
+    throw e;
+  }
 }
 
 // Escape pipe characters for markdown table cells
