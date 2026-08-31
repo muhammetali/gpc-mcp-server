@@ -331,10 +331,10 @@ export async function checkCrashAnomaly(): Promise<string> {
     if (increasePercent > 50 && recentAvg > 0.005) { // 50% increase AND > 0.5% total rate
       md += `🚨 **ANOMALY DETECTED!** Crash rate has spiked by **${increasePercent.toFixed(0)}%**.\n\n`;
       md += `> **Action Required:** Consider halting staged rollouts using \`gpc_halt_rollout\` immediately.`;
-    } else if (increasePercent < 0) {
+    } else if (increasePercent <= -1) {
       md += `✅ **Looking Good!** Crash rate has decreased by **${Math.abs(increasePercent).toFixed(0)}%**.`;
     } else {
-      md += `✅ **Stable.** No significant anomalies detected (Change: +${increasePercent.toFixed(0)}%).`;
+      md += `✅ **Stable.** No significant anomalies detected (Change: ${increasePercent > 0 ? '+' : ''}${increasePercent.toFixed(0)}%).`;
     }
 
     return md;
