@@ -81,7 +81,7 @@ describe('tools/reports', () => {
 
   describe('getCrashReport', () => {
     it('should return crash report with data', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
+      global.fetch = vi.fn().mockImplementation(() => Promise.resolve(
         new Response(JSON.stringify({
           rows: [
             {
@@ -94,7 +94,7 @@ describe('tools/reports', () => {
             },
           ],
         }), { status: 200 })
-      );
+      ));
 
       const { getCrashReport } = await import('../tools/reports.js');
       const result = await getCrashReport('2026-03-10', '2026-03-12');
@@ -109,11 +109,11 @@ describe('tools/reports', () => {
     });
 
     it('should return fallback on 403 error (API unavailable)', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
+      global.fetch = vi.fn().mockImplementation(() => Promise.resolve(
         new Response(JSON.stringify({
           error: { code: 403, message: 'Forbidden', status: 'FORBIDDEN' },
         }), { status: 403 })
-      );
+      ));
 
       const { getCrashReport } = await import('../tools/reports.js');
       const result = await getCrashReport('2026-03-10', '2026-03-12');
@@ -125,15 +125,73 @@ describe('tools/reports', () => {
     });
 
     it('should handle empty crash data', async () => {
-      global.fetch = vi.fn().mockResolvedValue(
+      global.fetch = vi.fn().mockImplementation(() => Promise.resolve(
         new Response(JSON.stringify({ rows: [] }), { status: 200 })
-      );
+      ));
 
       const { getCrashReport } = await import('../tools/reports.js');
       const result = await getCrashReport('2026-03-10', '2026-03-12');
 
       expect(result).toContain('No crash data available');
       expect(result).toContain('2-3 days');
+    });
+
+    // [#195] The tool promised "crash and ANR rates" but only ever queried
+    // crashRateMetricSet, and sent UPPER_SNAKE metric names the API rejects
+    // with 400 — masked for months by the 403 fallback while the API was
+    // disabled. These pin the actual wire contract.
+    it('queries both crash and ANR metric sets with camelCase metric names', async () => {
+      const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+        new Response(JSON.stringify({ rows: [] }), { status: 200 })
+      ));
+      global.fetch = fetchMock;
+
+      const { getCrashReport } = await import('../tools/reports.js');
+      await getCrashReport('2026-03-10', '2026-03-12');
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [crashUrl, crashOpts] = fetchMock.mock.calls[0];
+      const [anrUrl, anrOpts] = fetchMock.mock.calls[1];
+      expect(crashUrl).toContain('crashRateMetricSet:query');
+      expect(anrUrl).toContain('anrRateMetricSet:query');
+      expect(JSON.parse(crashOpts.body).metrics).toEqual([
+        'crashRate',
+        'userPerceivedCrashRate',
+        'distinctUsers',
+      ]);
+      expect(JSON.parse(anrOpts.body).metrics).toEqual([
+        'anrRate',
+        'userPerceivedAnrRate',
+        'distinctUsers',
+      ]);
+    });
+
+    it('renders ANR rates from the anrRateMetricSet response', async () => {
+      const crashRows = { rows: [] };
+      const anrRows = {
+        rows: [
+          {
+            startTime: { year: 2026, month: 3, day: 10 },
+            metrics: {
+              anrRate: { decimalValue: '0.008' },
+              userPerceivedAnrRate: { decimalValue: '0.004' },
+              distinctUsers: '5',
+            },
+          },
+        ],
+      };
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(crashRows), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(anrRows), { status: 200 }));
+
+      const { getCrashReport } = await import('../tools/reports.js');
+      const result = await getCrashReport('2026-03-10', '2026-03-12');
+
+      expect(result).toContain('ANR Rate');
+      expect(result).toContain('0.80%'); // 0.008 * 100
+      expect(result).toContain('0.40%'); // 0.004 * 100
+      expect(result).toContain('| 5 |');
     });
   });
 

@@ -31,7 +31,12 @@ function getJWTClient(): JWT {
   jwtClient = new JWT({
     email: keys.client_email,
     key: keys.private_key,
-    scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+    // playdeveloperreporting: reports.ts (Android vitals) uses the same
+    // token; without this scope every vitals query 403s (#195).
+    scopes: [
+      'https://www.googleapis.com/auth/androidpublisher',
+      'https://www.googleapis.com/auth/playdeveloperreporting',
+    ],
   });
 
   return jwtClient;
