@@ -319,7 +319,13 @@ export async function checkCrashAnomaly(): Promise<string> {
     }
     const recentAvg = recentSum / recentRows.length;
 
-    const increasePercent = baselineAvg > 0 ? ((recentAvg - baselineAvg) / baselineAvg) * 100 : 0;
+    let increasePercent = 0;
+    if (baselineAvg > 0) {
+      increasePercent = ((recentAvg - baselineAvg) / baselineAvg) * 100;
+    } else if (recentAvg > 0) {
+      increasePercent = 999; // Represents an infinite/massive spike if baseline was exactly 0
+    }
+
     const baselinePct = (baselineAvg * 100).toFixed(2);
     const recentPct = (recentAvg * 100).toFixed(2);
 
@@ -329,7 +335,7 @@ export async function checkCrashAnomaly(): Promise<string> {
     md += `* **Recent Average (Last 2 days):** ${recentPct}%\n\n`;
 
     if (increasePercent > 50 && recentAvg > 0.005) { // 50% increase AND > 0.5% total rate
-      md += `🚨 **ANOMALY DETECTED!** Crash rate has spiked by **${increasePercent.toFixed(0)}%**.\n\n`;
+      md += `🚨 **ANOMALY DETECTED!** Crash rate has spiked by **${increasePercent === 999 ? '>900' : increasePercent.toFixed(0)}%**.\n\n`;
       md += `> **Action Required:** Consider halting staged rollouts using \`gpc_halt_rollout\` immediately.`;
     } else if (increasePercent <= -1) {
       md += `✅ **Looking Good!** Crash rate has decreased by **${Math.abs(increasePercent).toFixed(0)}%**.`;
