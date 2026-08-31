@@ -122,13 +122,19 @@ describe('auth', () => {
     await expect(getAccessToken()).rejects.toThrow('Failed to obtain access token');
   });
 
-  it('should use androidpublisher scope', async () => {
+  it('should request both publisher and reporting scopes', async () => {
+    // reports.ts calls playdeveloperreporting.googleapis.com with this same
+    // token; a publisher-only scope makes every vitals query 403 and the
+    // fallback in reports.ts hides it (#195).
     const { getAccessToken } = await import('../auth.js');
     await getAccessToken();
 
     const { JWT } = await import('google-auth-library');
     const calls = (JWT as any)._constructorCalls;
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls[0].scopes).toEqual(['https://www.googleapis.com/auth/androidpublisher']);
+    expect(calls[0].scopes).toEqual([
+      'https://www.googleapis.com/auth/androidpublisher',
+      'https://www.googleapis.com/auth/playdeveloperreporting',
+    ]);
   });
 });
