@@ -226,4 +226,46 @@ describe('tools/reports', () => {
       expect(body.timelineSpec.endTime).toEqual({ year: 2026, month: 1, day: 31 });
     });
   });
+  describe('checkCrashAnomaly', () => {
+    it('detects a crash anomaly', async () => {
+      // Mock rows for 14 days
+      const rows = [];
+      // 12 baseline days with 0.001 (0.1%) crash rate
+      for (let i = 0; i < 12; i++) {
+        rows.push({ metrics: { crashRate: { decimalValue: '0.001' } } });
+      }
+      // 2 recent days with 0.010 (1.0%) crash rate (huge spike)
+      rows.push({ metrics: { crashRate: { decimalValue: '0.010' } } });
+      rows.push({ metrics: { crashRate: { decimalValue: '0.010' } } });
+
+      global.fetch = vi.fn().mockImplementation(() => Promise.resolve(
+        new Response(JSON.stringify({ rows }), { status: 200 })
+      ));
+
+      const { checkCrashAnomaly } = await import('../tools/reports.js');
+      const result = await checkCrashAnomaly();
+
+      expect(result).toContain('ANOMALY DETECTED!');
+      expect(result).toContain('900%'); // (0.010 - 0.001) / 0.001 * 100
+      expect(result).toContain('gpc_halt_rollout');
+    });
+
+    it('reports stable when no anomaly', async () => {
+      const rows = [];
+      // 14 days with 0.002 (0.2%) crash rate
+      for (let i = 0; i < 14; i++) {
+        rows.push({ metrics: { crashRate: { decimalValue: '0.002' } } });
+      }
+
+      global.fetch = vi.fn().mockImplementation(() => Promise.resolve(
+        new Response(JSON.stringify({ rows }), { status: 200 })
+      ));
+
+      const { checkCrashAnomaly } = await import('../tools/reports.js');
+      const result = await checkCrashAnomaly();
+
+      expect(result).toContain('Stable');
+      expect(result).not.toContain('ANOMALY DETECTED!');
+    });
+  });
 });
