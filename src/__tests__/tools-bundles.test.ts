@@ -25,7 +25,7 @@ describe('tools/bundles', () => {
     mockExistsSync.mockReturnValue(true);
     mockStatSync.mockReturnValue({ size: 50 * 1024 * 1024 });
     mockReadFileSync.mockReturnValue(Buffer.from('fake-aab-data'));
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -155,7 +155,7 @@ describe('tools/bundles', () => {
       const result = await listBundles();
 
       expect(result).toContain('No bundles found');
-      expect(result).toContain('com.fixmob.vipchat');
+      expect(result).toContain('com.example.myapp');
     });
   });
 });

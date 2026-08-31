@@ -23,7 +23,7 @@ describe('tools/sharing', () => {
     originalFetch = global.fetch;
     vi.resetModules();
     mockExistsSync.mockReturnValue(true);
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -35,7 +35,7 @@ describe('tools/sharing', () => {
     it('should upload bundle for internal sharing', async () => {
       global.fetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({
-          downloadUrl: 'https://play.google.com/apps/test/com.fixmob.vipchat/123',
+          downloadUrl: 'https://play.google.com/apps/test/com.example.myapp/123',
           sha256: 'abc123hash',
         }), { status: 200 }),
       );

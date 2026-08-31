@@ -11,7 +11,7 @@ describe('tools/listings', () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     vi.resetModules();
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -31,9 +31,9 @@ describe('tools/listings', () => {
         // Get details via edit context
         return Promise.resolve(new Response(JSON.stringify({
           defaultLanguage: 'en-US',
-          contactEmail: 'info@goygoychat.com',
+          contactEmail: 'contact@example.com',
           contactPhone: '+1234567890',
-          contactWebsite: 'https://goygoychat.com',
+          contactWebsite: 'https://example.com',
         }), { status: 200 }));
       });
 
@@ -41,9 +41,9 @@ describe('tools/listings', () => {
       const result = await getAppInfo();
 
       expect(result).toContain('## Google Play App Info');
-      expect(result).toContain('com.fixmob.vipchat');
+      expect(result).toContain('com.example.myapp');
       expect(result).toContain('en-US');
-      expect(result).toContain('info@goygoychat.com');
+      expect(result).toContain('contact@example.com');
     });
   });
 
@@ -59,8 +59,8 @@ describe('tools/listings', () => {
         // List listings via edit context
         return Promise.resolve(new Response(JSON.stringify({
           listings: [
-            { language: 'en-US', title: 'GoyGoyChat', shortDescription: 'Voice chat app', fullDescription: 'Full desc', video: '' },
-            { language: 'tr-TR', title: 'GoyGoyChat', shortDescription: 'Sesli sohbet', fullDescription: 'Tam aciklama', video: '' },
+            { language: 'en-US', title: 'MyApp', shortDescription: 'Voice chat app', fullDescription: 'Full desc', video: '' },
+            { language: 'tr-TR', title: 'MyApp', shortDescription: 'Sesli sohbet', fullDescription: 'Tam aciklama', video: '' },
           ],
         }), { status: 200 }));
       });
@@ -69,7 +69,7 @@ describe('tools/listings', () => {
       const result = await listListings();
 
       expect(result).toContain('## Google Play Store Listings');
-      expect(result).toContain('GoyGoyChat');
+      expect(result).toContain('MyApp');
       expect(result).toContain('en-US');
       expect(result).toContain('tr-TR');
       // Should warn about missing locales (de-DE, es-419, fr-FR, ru-RU, ar)

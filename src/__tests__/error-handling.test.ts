@@ -10,7 +10,7 @@ describe('error handling', () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     vi.resetModules();
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {

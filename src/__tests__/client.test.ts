@@ -11,7 +11,7 @@ describe('client', () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     vi.resetModules();
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -38,7 +38,7 @@ describe('client', () => {
   describe('getPackageName', () => {
     it('should return package name from env', async () => {
       const { getPackageName } = await import('../client.js');
-      expect(getPackageName()).toBe('com.fixmob.vipchat');
+      expect(getPackageName()).toBe('com.example.myapp');
     });
 
     it('should throw when package name is missing', async () => {

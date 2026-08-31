@@ -6,7 +6,7 @@ import {
 } from '../constants.js';
 
 describe('constants', () => {
-  it('should have all GoyGoyChat locales', () => {
+  it('should have all MyApp locales', () => {
     expect(PROJECT_LOCALES).toContain('en-US');
     expect(PROJECT_LOCALES).toContain('tr-TR');
     expect(PROJECT_LOCALES).toContain('de-DE');

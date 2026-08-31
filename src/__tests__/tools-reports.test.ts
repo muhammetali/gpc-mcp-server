@@ -11,7 +11,7 @@ describe('tools/reports', () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     vi.resetModules();
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -63,7 +63,7 @@ describe('tools/reports', () => {
       expect(result).toContain('Acquisition Report');
       expect(result).toContain('Play Developer Reporting API may not be enabled');
       expect(result).toContain('Google Play Console');
-      expect(result).toContain('com.fixmob.vipchat');
+      expect(result).toContain('com.example.myapp');
     });
 
     it('should handle empty rows gracefully', async () => {
@@ -121,7 +121,7 @@ describe('tools/reports', () => {
       expect(result).toContain('Crash & ANR Report');
       expect(result).toContain('Play Developer Reporting API may not be enabled');
       expect(result).toContain('Android vitals');
-      expect(result).toContain('com.fixmob.vipchat');
+      expect(result).toContain('com.example.myapp');
     });
 
     it('should handle empty crash data', async () => {

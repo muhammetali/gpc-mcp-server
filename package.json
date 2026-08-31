@@ -1,7 +1,7 @@
 {
   "name": "gpc-mcp-server",
   "version": "1.0.0",
-  "description": "Google Play Console MCP Server - GoyGoyChat project",
+  "description": "Google Play Console MCP Server for AI coding agents",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

@@ -11,7 +11,7 @@ describe('tools/subscriptions', () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     vi.resetModules();
-    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.fixmob.vipchat';
+    process.env.GOOGLE_PLAY_PACKAGE_NAME = 'com.example.myapp';
   });
 
   afterEach(() => {
@@ -26,7 +26,7 @@ describe('tools/subscriptions', () => {
           subscriptions: [
             {
               productId: 'premium_monthly',
-              packageName: 'com.fixmob.vipchat',
+              packageName: 'com.example.myapp',
               basePlans: [
                 {
                   basePlanId: 'monthly',
@@ -76,7 +76,7 @@ describe('tools/subscriptions', () => {
       global.fetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({
           productId: 'premium_monthly',
-          packageName: 'com.fixmob.vipchat',
+          packageName: 'com.example.myapp',
           archived: false,
           basePlans: [
             {
@@ -137,7 +137,7 @@ describe('tools/subscriptions', () => {
           // GET current subscription
           return Promise.resolve(new Response(JSON.stringify({
             productId: 'premium_monthly',
-            packageName: 'com.fixmob.vipchat',
+            packageName: 'com.example.myapp',
             listings: [
               { languageCode: 'en-US', title: 'Old Title', description: 'Old desc' },
             ],
