@@ -1,105 +1,113 @@
-# Google Play Console MCP Server
+# 🤖 Google Play Console MCP Server
 
-MCP (Model Context Protocol) server for managing Google Play Console from Claude Code.
+[![npm version](https://img.shields.io/npm/v/gpc-mcp-server.svg)](https://npmjs.org/package/gpc-mcp-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-blue.svg)](https://modelcontextprotocol.io/)
 
-## Tools (15)
+A powerful [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that allows AI Assistants (like Claude, Gemini, or any MCP client) to directly manage your Google Play Console. 
 
-### App & Listings
-- **gpc_get_app_info** - App details (package name, default language, contact info)
-- **gpc_list_listings** - All store listings across locales
-- **gpc_update_listing** - Update listing for a specific locale
+Stop clicking through slow web interfaces to release your app. **Just ask your AI agent to do it.**
 
-### Release & Track Management
-- **gpc_list_tracks** - List tracks (internal, alpha, beta, production) with releases
-- **gpc_create_release** - Create a new release on a track
-- **gpc_update_release_notes** - Update release notes for latest release
-- **gpc_set_rollout** - Set/update staged rollout percentage
-- **gpc_halt_rollout** - Halt an ongoing rollout
+> "Claude, what's the crash rate on production?"
+> "Gemini, create a new internal release and update the release notes."
+> "Claude, list 1-star reviews from today and reply to them asking for details."
 
-### Reviews
-- **gpc_list_reviews** - User reviews with ratings and reply status
-- **gpc_reply_review** - Reply to a user review
+---
 
-### Reports & Vitals
-- **gpc_acquisition_report** - Install/acquisition statistics
-- **gpc_crash_report** - Crash and ANR rates from Android vitals
+## 🌟 Key Features
 
-### Screenshots & Images
-- **gpc_list_images** - List uploaded images for a locale
-- **gpc_upload_image** - Upload screenshot/feature graphic/icon
-- **gpc_delete_image** - Delete a single image
+*   🚀 **Release Management:** Create releases, manage tracks, update release notes, and control staged rollouts.
+*   📊 **App Vitals & Reports:** Fetch acquisition data, crash rates, and ANR statistics instantly.
+*   💬 **Review Management:** Read user reviews, filter by rating, and post replies automatically.
+*   🖼️ **Store Presence:** Update store listings, translations, and manage screenshots/feature graphics.
 
-## Setup
+## 🛠️ Provided Tools
 
-### 1. Service Account
+This MCP server exposes 15 powerful tools to your AI agent:
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Enable "Google Play Android Developer API"
-3. Create a Service Account with JSON key
+### 📦 App & Listings
+*   `gpc_get_app_info` - Get app details (package name, default language, contact info)
+*   `gpc_list_listings` - Fetch all store listings across locales
+*   `gpc_update_listing` - Update store listing for a specific locale
+
+### 🚀 Release & Track Management
+*   `gpc_list_tracks` - List tracks (internal, alpha, beta, production) with current releases
+*   `gpc_create_release` - Create a new release on a specified track
+*   `gpc_update_release_notes` - Update release notes for the latest release
+*   `gpc_set_rollout` - Set/update staged rollout percentage
+*   `gpc_halt_rollout` - Halt an ongoing staged rollout
+
+### 💬 Reviews
+*   `gpc_list_reviews` - Fetch user reviews with ratings and reply status
+*   `gpc_reply_review` - Post a reply to a user review
+
+### 📈 Reports & Vitals
+*   `gpc_acquisition_report` - Fetch install/acquisition statistics
+*   `gpc_crash_report` - Get Crash and ANR rates from Android Vitals
+
+### 📸 Screenshots & Images
+*   `gpc_list_images` - List uploaded images for a specific locale
+*   `gpc_upload_image` - Upload screenshots/feature graphics/icons
+*   `gpc_delete_image` - Delete a specific image
+
+---
+
+## ⚙️ Quick Start
+
+### 1. Obtain a Service Account Key
+1. Go to [Google Cloud Console](https://console.cloud.google.com).
+2. Enable the **"Google Play Android Developer API"**.
+3. Create a Service Account and download the **JSON key**.
 4. In [Google Play Console](https://play.google.com/console) > Setup > API access:
-   - Link the Google Cloud project
-   - Grant the service account "Admin" or "Release manager" permissions
+   - Link your Google Cloud project.
+   - Grant the service account **"Admin"** or **"Release manager"** permissions.
 
-### 2. Install
+### 2. Installation
 
+Clone this repository and build:
 ```bash
-cd tools/gpc-mcp-server
+git clone https://github.com/YOUR_USERNAME/gpc-mcp-server.git
+cd gpc-mcp-server
 npm install
 npm run build
 ```
 
-### 3. Configure Claude Code
+### 3. Connect to Claude Code (or any MCP Client)
+
+Use the `claude mcp add` command to inject this server into your Claude environment:
 
 ```bash
 claude mcp add --scope user gpc-mcp \
-  -e GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=/home/mali/ssh_backup_goygoychat/play-store-service-account.json \
-  -e GOOGLE_PLAY_PACKAGE_NAME=com.fixmob.vipchat \
-  -- node /home/mali/Development/falla-clone/tools/gpc-mcp-server/dist/index.js
+  -e GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=/path/to/your/service-account.json \
+  -e GOOGLE_PLAY_PACKAGE_NAME=com.yourcompany.appname \
+  -- node /path/to/gpc-mcp-server/dist/index.js
 ```
 
-### 4. Test
-
-```bash
-npm test
-```
-
-## Environment Variables
-
+### Environment Variables Required
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Path to service account JSON key file | `/path/to/service-account.json` |
-| `GOOGLE_PLAY_PACKAGE_NAME` | Android package name | `com.fixmob.vipchat` |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Absolute path to the Service Account JSON key | `/users/me/secrets/play-store.json` |
+| `GOOGLE_PLAY_PACKAGE_NAME` | Your Android application package name | `com.example.myapp` |
 
-## Supported Locales
+---
 
-| Code | Language |
-|------|----------|
-| en-US | English (US) |
-| tr-TR | Turkish |
-| de-DE | German |
-| es-419 | Spanish (Latin America) |
-| fr-FR | French |
-| ru-RU | Russian |
-| ar | Arabic |
+## 🤖 Example AI Prompts
 
-## Common Workflows
+Once configured, you can just talk to your AI agent naturally:
 
-### New Release
-```
-gpc_list_tracks -> gpc_create_release -> gpc_set_rollout
-```
+**Checking App Health:**
+> *"Are there any new crashes for our app today?"* -> Agent calls `gpc_crash_report`
 
-### Update Store Listing
-```
-gpc_list_listings -> gpc_update_listing (per locale)
-```
+**Release Workflow:**
+> *"Create a new internal release and update the Turkish release notes to say 'Bug fixes'."* -> Agent calls `gpc_create_release` and `gpc_update_release_notes`
 
-### Monitor Reviews
-```
-gpc_list_reviews -> gpc_reply_review (for low ratings)
-```
+**Customer Support:**
+> *"Find all 1-star reviews from this week and draft replies for me."* -> Agent calls `gpc_list_reviews` and `gpc_reply_review`
 
-### Check App Health
-```
-gpc_crash_report -> gpc_acquisition_report
-```
+---
+
+## 📝 Supported Locales
+Includes standard Play Console locales: `en-US`, `tr-TR`, `de-DE`, `es-419`, `fr-FR`, `ru-RU`, `ar` and many more.
+
+## 📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
