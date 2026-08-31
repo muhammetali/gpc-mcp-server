@@ -24,7 +24,7 @@ import {
   validateRelease, releaseHistory,
 } from './tools/tracks.js';
 import { listReviews, replyReview } from './tools/reviews.js';
-import { getAcquisitionReport, getCrashReport } from './tools/reports.js';
+import { getAcquisitionReport, getCrashReport, checkCrashAnomaly } from './tools/reports.js';
 import { listImages, uploadImage, deleteImage, deleteAllImages } from './tools/images.js';
 import { uploadBundle, listBundles, uploadAab, uploadMapping } from './tools/bundles.js';
 import { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from './tools/products.js';
@@ -342,7 +342,7 @@ server.tool(
 
 server.tool(
   'gpc_crash_report',
-  'Get crash and ANR rates from Android vitals. Shows crash rate, user-perceived crash rate, and affected users.',
+  'Get App Crash and ANR rates from Android Vitals over a date range. Compares against Play Store bad behavior thresholds.',
   {
     startDate: z.string().describe('Start date (YYYY-MM-DD)'),
     endDate: z.string().describe('End date (YYYY-MM-DD)'),
@@ -350,6 +350,20 @@ server.tool(
   async ({ startDate, endDate }) => {
     try {
       const result = await getCrashReport(startDate, endDate);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_crash_anomaly_detector',
+  'Automatically analyze crash rates over the last 14 days and detect if there is a sudden spike in crashes. Useful for monitoring release health.',
+  {},
+  async () => {
+    try {
+      const result = await checkCrashAnomaly();
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };

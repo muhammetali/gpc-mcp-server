@@ -271,3 +271,74 @@ function getCrashFallback(pkg: string, startDate: string, endDate: string): stri
   md += `Use the Firebase MCP tools (\`crashlytics_list_events\`, \`crashlytics_get_issue\`) for detailed crash analysis.\n`;
   return md;
 }
+
+export async function checkCrashAnomaly(): Promise<string> {
+  const pkg = getPackageName();
+  const token = await getAccessToken();
+
+  // Look at last 14 days
+  const today = new Date();
+  const endDate = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000); // Play Console data is delayed by ~2 days
+  const startDate = new Date(endDate.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+
+  try {
+    const crash = await queryVitalsMetricSet(
+      pkg, token, 'crashRateMetricSet',
+      ['crashRate'],
+      startStr, endStr,
+    );
+
+    if (crash.status === 403 || crash.status === 404) {
+      return "Anomaly detection requires the Play Developer Reporting API to be enabled.";
+    }
+    
+    if (crash.errorBody) {
+      return `Error: ${crash.errorBody}`;
+    }
+
+    if (crash.rows.length < 5) {
+      return `Not enough recent data to perform anomaly detection (found ${crash.rows.length} days of data).`;
+    }
+
+    // Calculate baseline (first N-2 days)
+    const baselineRows = crash.rows.slice(0, crash.rows.length - 2);
+    const recentRows = crash.rows.slice(crash.rows.length - 2);
+
+    let baselineSum = 0;
+    for (const row of baselineRows) {
+      baselineSum += parseFloat(row.metrics?.crashRate?.decimalValue || '0');
+    }
+    const baselineAvg = baselineSum / baselineRows.length;
+
+    let recentSum = 0;
+    for (const row of recentRows) {
+      recentSum += parseFloat(row.metrics?.crashRate?.decimalValue || '0');
+    }
+    const recentAvg = recentSum / recentRows.length;
+
+    const increasePercent = baselineAvg > 0 ? ((recentAvg - baselineAvg) / baselineAvg) * 100 : 0;
+    const baselinePct = (baselineAvg * 100).toFixed(2);
+    const recentPct = (recentAvg * 100).toFixed(2);
+
+    let md = `## Crash Anomaly Detection\n\n`;
+    md += `Analyzed crash rates from ${startStr} to ${endStr}.\n\n`;
+    md += `* **Historical Baseline (12 days):** ${baselinePct}%\n`;
+    md += `* **Recent Average (Last 2 days):** ${recentPct}%\n\n`;
+
+    if (increasePercent > 50 && recentAvg > 0.005) { // 50% increase AND > 0.5% total rate
+      md += `🚨 **ANOMALY DETECTED!** Crash rate has spiked by **${increasePercent.toFixed(0)}%**.\n\n`;
+      md += `> **Action Required:** Consider halting staged rollouts using \`gpc_halt_rollout\` immediately.`;
+    } else if (increasePercent < 0) {
+      md += `✅ **Looking Good!** Crash rate has decreased by **${Math.abs(increasePercent).toFixed(0)}%**.`;
+    } else {
+      md += `✅ **Stable.** No significant anomalies detected (Change: +${increasePercent.toFixed(0)}%).`;
+    }
+
+    return md;
+  } catch (e: any) {
+    return `Error running anomaly detection: ${e.message}`;
+  }
+}
