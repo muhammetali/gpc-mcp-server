@@ -44,6 +44,7 @@ This MCP server exposes 15 powerful tools to your AI agent:
 ### 📈 Reports & Vitals
 *   `gpc_acquisition_report` - Fetch install/acquisition statistics
 *   `gpc_crash_report` - Get Crash and ANR rates from Android Vitals
+*   `gpc_crash_anomaly_detector` - Compares the last 2 days' crash rate against the prior 12-day baseline and flags a spike (🚨) worth halting a rollout for
 
 ### 📸 Screenshots & Images
 *   `gpc_list_images` - List uploaded images for a specific locale
@@ -97,6 +98,9 @@ Once configured, you can just talk to your AI agent naturally:
 
 **Checking App Health:**
 > *"Are there any new crashes for our app today?"* -> Agent calls `gpc_crash_report`
+
+**Rollout Safety Check:**
+> *"Is our latest rollout safe, or should we halt it?"* -> Agent calls `gpc_crash_anomaly_detector`, and if it flags a spike, follows up with `gpc_halt_rollout`
 
 **Release Workflow:**
 > *"Create a new internal release and update the Turkish release notes to say 'Bug fixes'."* -> Agent calls `gpc_create_release` and `gpc_update_release_notes`
