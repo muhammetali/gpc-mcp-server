@@ -229,7 +229,7 @@ describe('tools/reports', () => {
   describe('checkCrashAnomaly', () => {
     it('detects a crash anomaly', async () => {
       // Mock rows for 14 days
-      const rows = [];
+      const rows: any[] = [];
       // 12 baseline days with 0.001 (0.1%) crash rate
       for (let i = 0; i < 12; i++) {
         rows.push({ metrics: { crashRate: { decimalValue: '0.001' } } });
@@ -251,7 +251,7 @@ describe('tools/reports', () => {
     });
 
     it('reports stable when no anomaly', async () => {
-      const rows = [];
+      const rows: any[] = [];
       // 14 days with 0.002 (0.2%) crash rate
       for (let i = 0; i < 14; i++) {
         rows.push({ metrics: { crashRate: { decimalValue: '0.002' } } });
