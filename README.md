@@ -108,6 +108,12 @@ Once configured, you can just talk to your AI agent naturally:
 **Customer Support:**
 > *"Find all 1-star reviews from this week and draft replies for me."* -> Agent calls `gpc_list_reviews` and `gpc_reply_review`
 
+**Auto-Generate Release Notes from Git:**
+> *"Look at the commits since our last tag and write user-friendly release notes from them, then publish them."* -> Agent reads your local git history, drafts copy, and calls `gpc_update_release_notes`
+
+**Store Listing Optimization:**
+> *"Pull our current store listing and suggest a stronger short description for better conversion."* -> Agent calls `gpc_list_listings` to read the current copy, then `gpc_update_listing` to publish the new one
+
 ---
 
 ## 📝 Supported Locales
