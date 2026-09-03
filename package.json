@@ -4,6 +4,36 @@
   "description": "Google Play Console MCP Server for AI coding agents",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "gpc-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/__tests__",
+    "README.md",
+    "LICENSE"
+  ],
+  "mcpName": "io.github.muhammetali/gpc-mcp-server",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "google-play",
+    "google-play-console",
+    "android",
+    "app-release",
+    "reviews",
+    "claude"
+  ],
+  "author": "muhammetali",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muhammetali/gpc-mcp-server.git"
+  },
+  "homepage": "https://github.com/muhammetali/gpc-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/muhammetali/gpc-mcp-server/issues"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",

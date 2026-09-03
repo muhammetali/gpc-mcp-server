@@ -23,7 +23,7 @@ Stop clicking through slow web interfaces to release your app. **Just ask your A
 
 ## 🛠️ Provided Tools
 
-This MCP server exposes 15 powerful tools to your AI agent:
+This MCP server exposes 65 tools to your AI agent. Highlights:
 
 ### 📦 App & Listings
 *   `gpc_get_app_info` - Get app details (package name, default language, contact info)

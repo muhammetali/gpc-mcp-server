@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.muhammetali/gpc-mcp-server",
+  "description": "Google Play Console MCP Server for AI coding agents",
+  "repository": {
+    "url": "https://github.com/muhammetali/gpc-mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "gpc-mcp-server",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Absolute path to the Google Play service account JSON key",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true,
+          "name": "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
+        },
+        {
+          "description": "Android application package name (e.g. com.example.myapp)",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false,
+          "name": "GOOGLE_PLAY_PACKAGE_NAME"
+        }
+      ]
+    }
+  ]
+}
