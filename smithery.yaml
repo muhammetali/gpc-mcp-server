@@ -1,0 +1,19 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - googlePlayServiceAccountJson
+      - googlePlayPackageName
+    properties:
+      googlePlayServiceAccountJson:
+        type: string
+        description: Absolute path to the Google Play service account JSON key
+      googlePlayPackageName:
+        type: string
+        description: Android application package name (e.g. com.example.myapp)
+  commandFunction:
+    |-
+    (config) => ({ command: 'node', args: ['dist/index.js'], env: { GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: config.googlePlayServiceAccountJson, GOOGLE_PLAY_PACKAGE_NAME: config.googlePlayPackageName } })
