@@ -35,24 +35,32 @@ describe('error handling', () => {
 
   describe('timeout behavior', () => {
     it('should abort request after timeout', async () => {
-      global.fetch = vi.fn().mockImplementation((_url: string, options?: any) => {
-        return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => {
-            resolve(new Response(JSON.stringify({}), { status: 200 }));
-          }, 60_000);
+      vi.useFakeTimers();
+      try {
+        global.fetch = vi.fn().mockImplementation((_url: string, options?: any) => {
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              resolve(new Response(JSON.stringify({}), { status: 200 }));
+            }, 60_000);
 
-          if (options?.signal) {
-            options.signal.addEventListener('abort', () => {
-              clearTimeout(timer);
-              reject(new DOMException('The operation was aborted.', 'AbortError'));
-            });
-          }
+            if (options?.signal) {
+              options.signal.addEventListener('abort', () => {
+                clearTimeout(timer);
+                reject(new DOMException('The operation was aborted.', 'AbortError'));
+              });
+            }
+          });
         });
-      });
 
-      const { gpcGet } = await import('../client.js');
-      await expect(gpcGet('/slow-endpoint')).rejects.toThrow('aborted');
-    }, 35_000);
+        const { gpcGet } = await import('../client.js');
+        const result = expect(gpcGet('/slow-endpoint')).rejects.toThrow('aborted');
+        // client.ts's default request timeout (DEFAULT_TIMEOUT_MS) fires before the 60s mock resolve
+        await vi.advanceTimersByTimeAsync(30_000);
+        await result;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('rate limit error details', () => {

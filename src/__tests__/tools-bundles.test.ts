@@ -84,32 +84,40 @@ describe('tools/bundles', () => {
     });
 
     it('should handle upload timeout', async () => {
-      let callCount = 0;
-      global.fetch = vi.fn().mockImplementation((_url: string, options?: any) => {
-        callCount++;
-        if (callCount === 1) {
-          // Create edit succeeds
-          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
-        }
-        // Upload times out
-        return new Promise((_resolve, reject) => {
-          const timer = setTimeout(() => {
-            _resolve(new Response(JSON.stringify({}), { status: 200 }));
-          }, 999_999);
-
-          if (options?.signal) {
-            options.signal.addEventListener('abort', () => {
-              clearTimeout(timer);
-              reject(new DOMException('The operation was aborted.', 'AbortError'));
-            });
+      vi.useFakeTimers();
+      try {
+        let callCount = 0;
+        global.fetch = vi.fn().mockImplementation((_url: string, options?: any) => {
+          callCount++;
+          if (callCount === 1) {
+            // Create edit succeeds
+            return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
           }
+          // Upload never resolves on its own; only the AbortController timeout ends it
+          return new Promise((_resolve, reject) => {
+            const timer = setTimeout(() => {
+              _resolve(new Response(JSON.stringify({}), { status: 200 }));
+            }, 999_999);
+
+            if (options?.signal) {
+              options.signal.addEventListener('abort', () => {
+                clearTimeout(timer);
+                reject(new DOMException('The operation was aborted.', 'AbortError'));
+              });
+            }
+          });
         });
-      });
 
-      const { uploadBundle } = await import('../tools/bundles.js');
+        const { uploadBundle } = await import('../tools/bundles.js');
 
-      await expect(uploadBundle('/path/to/large-app.aab')).rejects.toThrow('aborted');
-    }, 400_000);
+        const result = expect(uploadBundle('/path/to/large-app.aab')).rejects.toThrow('aborted');
+        // uploadBundle uses UPLOAD_TIMEOUT_MS * 3 (360s) for the upload step's AbortController
+        await vi.advanceTimersByTimeAsync(360_000);
+        await result;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('listBundles', () => {
