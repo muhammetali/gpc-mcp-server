@@ -141,4 +141,113 @@ describe('tools/images', () => {
       expect(result).toContain('img-1');
     });
   });
+
+  describe('uploadImagesBatch', () => {
+    beforeEach(async () => {
+      // The uploadImage suite leaves existsSync stubbed false; vi.mock factories
+      // survive restoreAllMocks, so reset it here or every file looks missing.
+      const { existsSync } = await import('fs');
+      (existsSync as any).mockReturnValue(true);
+    });
+
+    /** Records every request so tests can assert on the edit/commit shape. */
+    function trackFetch() {
+      const calls: { method: string; url: string }[] = [];
+      global.fetch = vi.fn().mockImplementation((url: any, init: any) => {
+        const u = String(url);
+        calls.push({ method: init?.method || 'GET', url: u });
+        if (u.endsWith('/edits')) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (u.includes(':commit')) {
+          return Promise.resolve(new Response(JSON.stringify({ id: 'edit-1' }), { status: 200 }));
+        }
+        if (init?.method === 'DELETE') {
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify({ id: 'img-x' }), { status: 200 }));
+      });
+      return calls;
+    }
+
+    it('uploads every locale inside ONE edit with ONE commit', async () => {
+      // The whole reason this tool exists: Play validates listing completeness
+      // at commit time, so a per-file commit cannot seed a new locale.
+      const calls = trackFetch();
+
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      const result = await uploadImagesBatch('phoneScreenshots', [
+        { language: 'de-DE', filePaths: ['/a/1.png', '/a/2.png'] },
+        { language: 'fr-FR', filePaths: ['/a/3.png'] },
+      ]);
+
+      expect(calls.filter((c) => c.url.endsWith('/edits')).length).toBe(1);
+      expect(calls.filter((c) => c.url.includes(':commit')).length).toBe(1);
+      expect(calls.filter((c) => c.method === 'POST' && c.url.includes('/phoneScreenshots')).length).toBe(3);
+      expect(result).toContain('**3** image(s)');
+      expect(result).toContain('**2** locale(s)');
+      expect(result).toContain('de-DE');
+      expect(result).toContain('fr-FR');
+    });
+
+    it('does not delete anything unless replace is set', async () => {
+      const calls = trackFetch();
+
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      await uploadImagesBatch('phoneScreenshots', [
+        { language: 'de-DE', filePaths: ['/a/1.png'] },
+      ]);
+
+      expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0);
+    });
+
+    it('clears each locale first when replace is set', async () => {
+      const calls = trackFetch();
+
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      const result = await uploadImagesBatch(
+        'phoneScreenshots',
+        [
+          { language: 'de-DE', filePaths: ['/a/1.png'] },
+          { language: 'fr-FR', filePaths: ['/a/2.png'] },
+        ],
+        true,
+      );
+
+      expect(calls.filter((c) => c.method === 'DELETE').length).toBe(2);
+      expect(calls.filter((c) => c.url.endsWith('/edits')).length).toBe(1);
+      expect(result).toContain('existing images replaced');
+    });
+
+    it('validates files BEFORE opening an edit', async () => {
+      // A file that turns out to be missing halfway through would otherwise
+      // leave a dangling edit and a half-applied locale.
+      const { existsSync } = await import('fs');
+      (existsSync as any).mockImplementation((p: any) => !String(p).includes('missing'));
+      const calls = trackFetch();
+
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      await expect(
+        uploadImagesBatch('phoneScreenshots', [
+          { language: 'de-DE', filePaths: ['/a/1.png'] },
+          { language: 'fr-FR', filePaths: ['/a/missing.png'] },
+        ]),
+      ).rejects.toThrow('File not found');
+
+      expect(calls.filter((c) => c.url.endsWith('/edits')).length).toBe(0);
+      (existsSync as any).mockReturnValue(true);
+    });
+
+    it('rejects an empty uploads list', async () => {
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      await expect(uploadImagesBatch('phoneScreenshots', [])).rejects.toThrow('uploads is empty');
+    });
+
+    it('rejects a locale with no files', async () => {
+      const { uploadImagesBatch } = await import('../tools/images.js');
+      await expect(
+        uploadImagesBatch('phoneScreenshots', [{ language: 'de-DE', filePaths: [] }]),
+      ).rejects.toThrow('No filePaths given');
+    });
+  });
 });

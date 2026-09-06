@@ -25,7 +25,7 @@ import {
 } from './tools/tracks.js';
 import { listReviews, replyReview } from './tools/reviews.js';
 import { getAcquisitionReport, getCrashReport, checkCrashAnomaly } from './tools/reports.js';
-import { listImages, uploadImage, deleteImage, deleteAllImages } from './tools/images.js';
+import { listImages, uploadImage, uploadImagesBatch, deleteImage, deleteAllImages } from './tools/images.js';
 import { uploadBundle, listBundles, uploadAab, uploadMapping } from './tools/bundles.js';
 import { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from './tools/products.js';
 import { listSubscriptions, getSubscription, createSubscription, updateSubscription } from './tools/subscriptions.js';
@@ -437,6 +437,38 @@ server.tool(
   async ({ language, imageType, filePath }) => {
     try {
       const result = await uploadImage(language, imageType, filePath);
+      return { content: [{ type: 'text', text: result }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: handleError(e) }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  'gpc_upload_images_batch',
+  'Upload many images across one or more locales in a SINGLE edit. Required when seeding a newly created locale: Play validates listing completeness at commit time and demands at least 2 phone screenshots, so gpc_upload_image — which commits after every file — fails with "too few screenshots" and leaves the locale empty. Set replace to clear existing images of this type first.',
+  {
+    imageType: imageTypeSchema,
+    uploads: z
+      .array(
+        z.object({
+          language: localeSchema,
+          filePaths: z
+            .array(z.string())
+            .min(1)
+            .describe('Absolute paths to the image files, in the order they should appear'),
+        }),
+      )
+      .min(1)
+      .describe('One entry per locale'),
+    replace: z
+      .boolean()
+      .optional()
+      .describe('Delete each locale\'s existing images of this type first, so the result is exactly the given list (default: false, appends)'),
+  },
+  async ({ imageType, uploads, replace }) => {
+    try {
+      const result = await uploadImagesBatch(imageType, uploads, replace ?? false);
       return { content: [{ type: 'text', text: result }] };
     } catch (e) {
       return { content: [{ type: 'text', text: handleError(e) }], isError: true };

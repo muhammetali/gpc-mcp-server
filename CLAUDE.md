@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Google Play Console. Exposes 62 tools that let Claude fully manage Android apps via Google Play Developer API — listings, releases, reviews, reports, screenshots, bundles, in-app products, subscriptions, purchases, orders, recovery, testers, and more.
+MCP (Model Context Protocol) server for Google Play Console. Exposes 63 tools that let Claude fully manage Android apps via Google Play Developer API — listings, releases, reviews, reports, screenshots, bundles, in-app products, subscriptions, purchases, orders, recovery, testers, and more.
 
 ## Commands
 
@@ -46,6 +46,8 @@ src/
 ```
 
 **Key pattern — Edit/Commit cycle**: Mutation operations on editable resources (listings, tracks, images, testers, countries) follow Google Play's edit-based model: create edit → modify resource → commit edit. Non-edit resources (products, subscriptions, purchases, orders) use direct API calls.
+
+**When one edit per call is not enough**: Play validates a listing's *completeness* at commit time, so some states are unreachable one mutation at a time. The known case is screenshots: a locale that has a store listing must carry at least 2 phone screenshots, so seeding a freshly created locale with `gpc_upload_image` fails — the first file commits alone, validation sees 1 < 2 and rejects it with `This app has too few screenshots for language <locale>`, leaving the locale permanently empty. `gpc_upload_images_batch` exists for this: it validates and reads every file first, then does all deletes and uploads inside one edit and commits once. Locales that already have images are unaffected, which is why the single-file tool works there. If another resource turns out to have a commit-time completeness rule, it needs the same treatment.
 
 **HTTP client** (`client.ts`): Wraps fetch with Bearer auth injection, tiered timeouts (30s default, 120s uploads, 600s bundles), rate-limit retry (single retry after 2s on 429), and `GPCClientError` with status-based help messages.
 

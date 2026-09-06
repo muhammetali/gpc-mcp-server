@@ -49,6 +49,7 @@ This MCP server exposes 65 tools to your AI agent. Highlights:
 ### 📸 Screenshots & Images
 *   `gpc_list_images` - List uploaded images for a specific locale
 *   `gpc_upload_image` - Upload screenshots/feature graphics/icons
+*   `gpc_upload_images_batch` - Upload many images across locales in a **single edit** (required to seed a new locale: Play demands ≥2 phone screenshots at commit time, so per-file commits fail with "too few screenshots")
 *   `gpc_delete_image` - Delete a specific image
 
 ---

@@ -47,11 +47,21 @@ export async function listImages(
   return md;
 }
 
-export async function uploadImage(
-  language: string,
-  imageType: ImageType,
-  filePath: string,
-): Promise<string> {
+interface PreparedImage {
+  path: string;
+  name: string;
+  data: Uint8Array;
+  mimeType: string;
+  sizeKB: string;
+}
+
+/**
+ * Resolves, validates and reads an image file.
+ *
+ * Shared by uploadImage and uploadImagesBatch so the extension/size/MIME rules
+ * live in one place.
+ */
+function prepareImage(filePath: string): PreparedImage {
   // Path traversal protection
   const resolvedPath = resolve(filePath);
   if (!existsSync(resolvedPath)) {
@@ -81,14 +91,31 @@ export async function uploadImage(
   const mimeType = mimeMap[ext || ''] || 'application/octet-stream';
 
   const fileData = readFileSync(resolvedPath);
-  const fileSizeKB = (fileData.length / 1024).toFixed(0);
+
+  return {
+    path: resolvedPath,
+    name: resolvedPath.split('/').pop() || resolvedPath,
+    data: new Uint8Array(fileData),
+    mimeType,
+    sizeKB: (fileData.length / 1024).toFixed(0),
+  };
+}
+
+export async function uploadImage(
+  language: string,
+  imageType: ImageType,
+  filePath: string,
+): Promise<string> {
+  const file = prepareImage(filePath);
+  const { path: resolvedPath, mimeType, sizeKB: fileSizeKB } = file;
+  const fileData = file.data;
 
   const pkg = getPackageName();
   const editId = await createEdit();
 
   const result = await gpcUpload<Image>(
     `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`,
-    new Uint8Array(fileData),
+    fileData,
     mimeType,
   );
 
@@ -104,6 +131,80 @@ export async function uploadImage(
   md += `| **Image ID** | ${result.id || '-'} |\n`;
   md += `\n**Status:** Upload complete!`;
 
+  return md;
+}
+
+export interface BatchUpload {
+  language: string;
+  filePaths: string[];
+}
+
+/**
+ * Uploads many images across one or more locales inside a SINGLE edit.
+ *
+ * Why this exists: Google Play validates a listing's completeness at *commit*
+ * time, and a locale that has a store listing must carry at least 2 phone
+ * screenshots. `uploadImage` commits after every single file, so seeding a
+ * freshly created locale is impossible with it — the first screenshot commits
+ * alone, validation sees 1 < 2 and rejects it with:
+ *
+ *     This app has too few screenshots for language <locale>
+ *
+ * leaving the locale permanently empty. Batching every delete and upload into
+ * one edit lets validation see the whole set at once.
+ *
+ * `replace: true` clears each locale's existing images of this type first, so
+ * the result is exactly the given list rather than an append.
+ */
+export async function uploadImagesBatch(
+  imageType: ImageType,
+  uploads: BatchUpload[],
+  replace = false,
+): Promise<string> {
+  if (uploads.length === 0) {
+    throw new Error('uploads is empty — nothing to do.');
+  }
+
+  // Validate and read everything BEFORE opening an edit: a file that turns out
+  // to be missing halfway through would otherwise leave a dangling edit and a
+  // half-applied locale.
+  const hazir = uploads.map(({ language, filePaths }) => {
+    if (filePaths.length === 0) {
+      throw new Error(`No filePaths given for locale ${language}.`);
+    }
+    return { language, files: filePaths.map(prepareImage) };
+  });
+
+  const pkg = getPackageName();
+  const editId = await createEdit();
+
+  for (const { language, files } of hazir) {
+    if (replace) {
+      await gpcDelete(
+        `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`
+      );
+    }
+    for (const file of files) {
+      await gpcUpload<Image>(
+        `/applications/${pkg}/edits/${editId}/listings/${language}/${imageType}`,
+        file.data,
+        file.mimeType,
+      );
+    }
+  }
+
+  await commitEdit(editId);
+
+  const toplam = hazir.reduce((n, u) => n + u.files.length, 0);
+  let md = `## Batch Upload Complete\n\n`;
+  md += `**${toplam}** image(s) across **${hazir.length}** locale(s), committed in a single edit`;
+  md += replace ? ' (existing images replaced).\n\n' : '.\n\n';
+  md += `| Locale | Images | Files |\n`;
+  md += `|--------|--------|-------|\n`;
+  for (const { language, files } of hazir) {
+    md += `| ${language} | ${files.length} | ${files.map((f) => f.name).join(', ')} |\n`;
+  }
+  md += `\n**Type:** ${imageType}`;
   return md;
 }
 
