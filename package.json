@@ -52,5 +52,27 @@
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.0"
+  },
+  "overrides": {
+    "es-define-property": "npm:@socketregistry/es-define-property@^1",
+    "function-bind": "npm:@socketregistry/function-bind@^1",
+    "gopd": "npm:@socketregistry/gopd@^1",
+    "has-symbols": "npm:@socketregistry/has-symbols@^1",
+    "hasown": "npm:@socketregistry/hasown@^1",
+    "object-assign": "npm:@socketregistry/object-assign@^1",
+    "safe-buffer": "npm:@socketregistry/safe-buffer@^1",
+    "safer-buffer": "npm:@socketregistry/safer-buffer@^1",
+    "side-channel": "npm:@socketregistry/side-channel@^1"
+  },
+  "resolutions": {
+    "es-define-property": "npm:@socketregistry/es-define-property@^1",
+    "function-bind": "npm:@socketregistry/function-bind@^1",
+    "gopd": "npm:@socketregistry/gopd@^1",
+    "has-symbols": "npm:@socketregistry/has-symbols@^1",
+    "hasown": "npm:@socketregistry/hasown@^1",
+    "object-assign": "npm:@socketregistry/object-assign@^1",
+    "safe-buffer": "npm:@socketregistry/safe-buffer@^1",
+    "safer-buffer": "npm:@socketregistry/safer-buffer@^1",
+    "side-channel": "npm:@socketregistry/side-channel@^1"
   }
 }
