@@ -1,28 +1,54 @@
-name: Publish Package
+name: Release
 
+# Runs on every push to main. semantic-release reads the commits since the
+# last release and decides whether they warrant a patch, minor or major —
+# or no release at all.
+#
+# It used to trigger on a `v*` tag, with the version bumped by hand. That is
+# now the wrong trigger: semantic-release *creates* the tag, so keeping it
+# would publish each version twice and the second attempt would fail with
+# "You cannot publish over the previously published versions" — the failure
+# this project's sibling hit when two systems both published.
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write # create the tag and the GitHub Release
+  issues: write
+  pull-requests: write
+  id-token: write # npm provenance and trusted publishing
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v4
         with:
-          node-version: "24"
+          # semantic-release needs full history and tags to know what the
+          # last release was.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          # Required for npm trusted publishing: it writes the registry into
+          # .npmrc so npm performs the OIDC exchange instead of looking for a
+          # token. @semantic-release/npm checks for an OIDC context before it
+          # demands NPM_TOKEN, so no token is needed anywhere.
           registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false
 
       - run: npm ci
-      - run: npm run build --if-present
+
+      # Verified before anything is published, not after.
+      - run: npm run build
       - run: npm test
-      - run: npm publish
+      - run: npm audit --omit=dev --audit-level=moderate
+
+      - run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

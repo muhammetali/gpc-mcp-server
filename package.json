@@ -1,6 +1,6 @@
 {
   "name": "gpc-mcp-server",
-  "version": "1.1.0",
+  "version": "0.0.0-development",
   "description": "Google Play Console MCP Server for AI coding agents",
   "type": "module",
   "main": "dist/index.js",
@@ -48,7 +48,12 @@
     "google-auth-library": "^11.0.2"
   },
   "devDependencies": {
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/github": "^12.0.9",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/node": "^22.13.10",
+    "semantic-release": "^25.0.9",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.0"
